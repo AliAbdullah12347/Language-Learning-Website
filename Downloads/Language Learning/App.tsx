@@ -30,6 +30,11 @@ const App: React.FC = () => {
   const [instructionLang, setInstructionLang] = useState(INSTRUCTION_LANGUAGES[0]);
   const [isAutoplay, setIsAutoplay] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [isHandsFree, setIsHandsFree] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState('');
+
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const accumulatedTranscriptRef = useRef('');
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -48,19 +53,59 @@ const App: React.FC = () => {
     if (SpeechRecognition) {
       const recognizer = new SpeechRecognition();
       recognizer.lang = targetLang.code;
-      recognizer.continuous = false;
-      recognizer.interimResults = false;
+      recognizer.continuous = true;
+      recognizer.interimResults = true;
 
-      recognizer.onstart = () => setIsRecording(true);
-      recognizer.onend = () => setIsRecording(false);
+      recognizer.onstart = () => {
+        setIsRecording(true);
+        if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+      };
+      recognizer.onend = () => {
+        setIsRecording(false);
+        // Auto-restart if hands-free is on
+        if (isHandsFree) {
+          try { recognizer.start(); } catch (e) { console.error("Auto-restart failed", e); }
+        }
+      };
+
       recognizer.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        handleSendMessage(transcript);
+        // Interruption detection: if user speaks while AI is talking, stop the AI
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+        }
+
+        let currentInterim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            accumulatedTranscriptRef.current += transcript + ' ';
+          } else {
+            currentInterim += transcript;
+          }
+        }
+
+        setInterimTranscript(currentInterim);
+        const fullPartial = accumulatedTranscriptRef.current + currentInterim;
+        if (fullPartial.trim()) setInput(fullPartial);
+
+        // Silence Detection Logic
+        if (isHandsFree) {
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+
+          silenceTimerRef.current = setTimeout(() => {
+            const finalSpeech = accumulatedTranscriptRef.current + currentInterim;
+            if (finalSpeech.trim().length > 2) {
+              handleSendMessage(finalSpeech.trim());
+              accumulatedTranscriptRef.current = '';
+              setInterimTranscript('');
+            }
+          }, 1800); // 1.8 seconds of silence to trigger response
+        }
       };
 
       recognitionRef.current = recognizer;
     }
-  }, [targetLang.code]);
+  }, [targetLang.code, isHandsFree]);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -71,8 +116,12 @@ const App: React.FC = () => {
   }, [messages, isLoading]);
 
   const handleSendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || isLoading) return;
 
+    // Clear any pending silence timer
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    accumulatedTranscriptRef.current = '';
+    setInterimTranscript('');
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -127,8 +176,21 @@ const App: React.FC = () => {
 
   const toggleRecording = () => {
     if (isRecording) {
+      if (isHandsFree) setIsHandsFree(false);
       recognitionRef.current?.stop();
     } else {
+      accumulatedTranscriptRef.current = '';
+      setInterimTranscript('');
+      recognitionRef.current?.start();
+    }
+  };
+
+  const toggleHandsFree = () => {
+    const newMode = !isHandsFree;
+    setIsHandsFree(newMode);
+    if (newMode && !isRecording) {
+      accumulatedTranscriptRef.current = '';
+      setInterimTranscript('');
       recognitionRef.current?.start();
     }
   };
@@ -142,18 +204,17 @@ const App: React.FC = () => {
       </div>
 
       {/* Header */}
-      <header className="bg-white/70 backdrop-blur-xl border-b border-white/20 px-6 py-4 flex items-center justify-between shadow-[0_1px_10px_rgba(0,0,0,0.02)] z-30 sticky top-0">
-        <div className="flex items-center gap-4">
-          <div className="bg-white p-1 rounded-2xl shadow-[0_8px_16px_rgba(79,70,229,0.1)] border border-slate-100 overflow-hidden">
-            <img src="/logo.png" alt="Polyglot Logo" className="h-9 w-9 object-contain" />
+      <header className="bg-white/70 backdrop-blur-xl border-b border-white/20 px-4 py-3 md:px-6 md:py-4 flex items-center justify-between shadow-[0_1px_10px_rgba(0,0,0,0.02)] z-30 sticky top-0">
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className="bg-white p-1 rounded-2xl shadow-[0_8px_16px_rgba(79,70,229,0.1)] border border-slate-100 overflow-hidden shrink-0">
+            <img src="/logo.png" alt="Polyglot Logo" className="h-8 w-8 md:h-9 md:w-9 object-contain" />
           </div>
-          <div>
-            <h1 className="text-base font-black text-slate-900 tracking-tight leading-none mb-1">POLYGLOT</h1>
-            <div className="flex items-center gap-2">
-              <span className="flex items-center gap-1.5 text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider uppercase border border-slate-200/50">
-                {targetLang.flag} {targetLang.name}
+          <div className="min-w-0">
+            <h1 className="text-sm md:text-base font-black text-slate-900 tracking-tight leading-none mb-1 truncate">POLYGLOT</h1>
+            <div className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1 text-[9px] md:text-[10px] bg-slate-100 text-slate-600 px-1.5 md:px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-slate-200/50">
+                {targetLang.flag} <span className="hidden sm:inline">{targetLang.name}</span><span className="sm:hidden">{targetLang.code.split('-')[0].toUpperCase()}</span>
               </span>
-
             </div>
           </div>
         </div>
@@ -172,6 +233,18 @@ const App: React.FC = () => {
                 <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
             )}
+          </button>
+          <button
+            onClick={toggleHandsFree}
+            className={`p-2.5 rounded-2xl transition-all active:scale-95 group relative ${isHandsFree ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+            </svg>
+            <span className="absolute -bottom-1 -right-1 flex h-3 w-3">
+              {isHandsFree && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+              <span className={`relative inline-flex rounded-full h-3 w-3 ${isHandsFree ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+            </span>
           </button>
           <button
             onClick={() => setShowSettings(true)}
@@ -208,15 +281,15 @@ const App: React.FC = () => {
             <div className="space-y-8">
               <div>
                 <label className="block text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Target Language</label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 md:gap-3">
                   {TARGET_LANGUAGES.map((lang) => (
                     <button
                       key={lang.code}
                       onClick={() => { setTargetLang(lang); setMessages([]); }}
-                      className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all hover:translate-y-[-2px] ${targetLang.code === lang.code ? 'border-indigo-600 bg-indigo-50/50 text-indigo-700 shadow-md ring-4 ring-indigo-50' : 'border-slate-50 bg-slate-50/50 text-slate-600 hover:border-slate-100 hover:bg-slate-100/50'}`}
+                      className={`flex items-center gap-2 md:gap-3 p-3 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all hover:translate-y-[-2px] ${targetLang.code === lang.code ? 'border-indigo-600 bg-indigo-50/50 text-indigo-700 shadow-md ring-4 ring-indigo-50' : 'border-slate-50 bg-slate-50/50 text-slate-600 hover:border-slate-100 hover:bg-slate-100/50'}`}
                     >
-                      <span className="text-2xl drop-shadow-sm">{lang.flag}</span>
-                      <span className="text-sm font-bold tracking-tight">{lang.name}</span>
+                      <span className="text-xl md:text-2xl drop-shadow-sm">{lang.flag}</span>
+                      <span className="text-xs md:text-sm font-bold tracking-tight text-left leading-tight">{lang.name}</span>
                     </button>
                   ))}
                 </div>
@@ -224,15 +297,15 @@ const App: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Instruction Language</label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 md:gap-3">
                   {INSTRUCTION_LANGUAGES.map((lang) => (
                     <button
                       key={lang.code}
                       onClick={() => setInstructionLang(lang)}
-                      className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all hover:translate-y-[-2px] ${instructionLang.code === lang.code ? 'border-slate-900 bg-slate-900 text-white shadow-xl ring-4 ring-slate-100' : 'border-slate-50 bg-slate-50/50 text-slate-600 hover:border-slate-100 hover:bg-slate-100/50'}`}
+                      className={`flex items-center gap-2 md:gap-3 p-3 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all hover:translate-y-[-2px] ${instructionLang.code === lang.code ? 'border-slate-900 bg-slate-900 text-white shadow-xl ring-4 ring-slate-100' : 'border-slate-50 bg-slate-50/50 text-slate-600 hover:border-slate-100 hover:bg-slate-100/50'}`}
                     >
-                      <span className="text-2xl drop-shadow-sm">{lang.flag}</span>
-                      <span className="text-sm font-bold tracking-tight">{lang.name}</span>
+                      <span className="text-xl md:text-2xl drop-shadow-sm">{lang.flag}</span>
+                      <span className="text-xs md:text-sm font-bold tracking-tight text-left leading-tight">{lang.name}</span>
                     </button>
                   ))}
                 </div>
@@ -250,23 +323,35 @@ const App: React.FC = () => {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto px-4 py-8 md:px-8 space-y-10 max-w-4xl mx-auto w-full relative z-10 custom-scrollbar scroll-smooth">
+      <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8 space-y-8 md:space-y-10 max-w-4xl mx-auto w-full relative z-10 custom-scrollbar scroll-smooth">
+        {isHandsFree && (
+          <div className="sticky top-0 z-20 flex justify-center -mt-2 mb-4 md:-mt-4 md:mb-6">
+            <div className="bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 px-3 py-1 md:px-4 md:py-1.5 rounded-full flex items-center gap-2 shadow-sm animate-in slide-in-from-top-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-[9px] md:text-[10px] font-black text-emerald-600 uppercase tracking-widest">Hands-Free Active</span>
+            </div>
+          </div>
+        )}
+
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-[70vh] text-center space-y-10 animate-in fade-in zoom-in duration-700">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] md:h-[70vh] text-center space-y-8 md:space-y-10 animate-in fade-in zoom-in duration-700 py-10">
             <div className="relative group">
               <div className="absolute inset-0 bg-indigo-600 rounded-full blur-[40px] opacity-20 group-hover:opacity-40 transition-opacity"></div>
-              <div className="w-40 h-40 bg-white rounded-full flex items-center justify-center text-6xl shadow-[0_12px_40px_rgba(0,0,0,0.08)] relative z-10 border border-slate-50 transition-transform hover:scale-105 duration-500">
+              <div className="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center text-5xl md:text-6xl shadow-[0_12px_40px_rgba(0,0,0,0.08)] relative z-10 border border-slate-50 transition-transform hover:scale-105 duration-500">
                 {targetLang.flag}
               </div>
             </div>
-            <div className="max-w-md">
-              <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter leading-tight">Master {targetLang.name.split(' ')[0]} <br /><span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent italic">Naturally.</span></h2>
-              <p className="text-slate-500 mb-12 text-lg font-medium leading-relaxed px-4">
+            <div className="max-w-md px-4">
+              <h2 className="text-3xl md:text-4xl font-black text-slate-900 mb-4 tracking-tighter leading-tight">Master {targetLang.name.split(' ')[0]} <br /><span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent italic">Naturally.</span></h2>
+              <p className="text-slate-500 mb-8 md:mb-12 text-base md:text-lg font-medium leading-relaxed">
                 Achieve fluency through immersive conversation. Direct, intuitive, and fun.
               </p>
               <button
                 onClick={() => handleSendMessage("Hi, let's start a conversation!")}
-                className="group px-12 py-5 font-black text-white bg-indigo-600 rounded-[2rem] shadow-[0_20px_40px_rgba(79,70,229,0.3)] hover:shadow-[0_25px_50px_rgba(79,70,229,0.4)] hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-3 mx-auto"
+                className="group px-8 md:px-12 py-4 md:py-5 font-black text-white bg-indigo-600 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_20px_40px_rgba(79,70,229,0.3)] hover:shadow-[0_25px_50px_rgba(79,70,229,0.4)] hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-3 mx-auto"
               >
                 START LEARNING
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transition-transform group-hover:translate-x-1" viewBox="0 0 20 20" fill="currentColor">
@@ -333,26 +418,27 @@ const App: React.FC = () => {
       </main>
 
       {/* Footer / Input Bar */}
-      <footer className="bg-white/70 backdrop-blur-2xl border-t border-white/20 p-6 md:px-12 md:py-8 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] z-40 relative sticky bottom-0">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-8">
-          <div className="flex items-center gap-4 md:gap-8 w-full bg-white/50 backdrop-blur-md p-3 md:p-4 rounded-[3rem] border border-white shadow-[0_20px_50px_rgba(0,0,0,0.05)] ring-1 ring-slate-100 transition-all focus-within:ring-4 focus-within:ring-indigo-100 focus-within:shadow-[0_25px_60px_rgba(0,0,0,0.08)]">
+      <footer className="bg-white/70 backdrop-blur-2xl border-t border-white/20 p-4 md:p-6 lg:p-8 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] z-40 relative sticky bottom-0">
+        <div className="max-w-3xl mx-auto flex flex-col items-center gap-4 md:gap-8">
+          <div className="flex items-center gap-3 md:gap-8 w-full bg-white/50 backdrop-blur-md p-2 md:p-4 rounded-[2.5rem] md:rounded-[3rem] border border-white shadow-[0_20px_50px_rgba(0,0,0,0.05)] ring-1 ring-slate-100 transition-all focus-within:ring-4 focus-within:ring-indigo-100">
             <button
               onClick={toggleRecording}
-              className={`flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center transition-all shadow-2xl relative overflow-hidden group ${isRecording ? 'bg-rose-500 scale-110 active:scale-105' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'}`}
+              className={`flex-shrink-0 w-14 h-14 md:w-20 md:h-20 rounded-full flex items-center justify-center transition-all shadow-xl md:shadow-2xl relative overflow-hidden group ${isRecording ? 'bg-rose-500 scale-105 md:scale-110 active:scale-100' : (isHandsFree ? 'bg-emerald-600 hover:bg-emerald-700 active:scale-95' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95')}`}
             >
               {isRecording ? (
-                <div className="flex items-center gap-1.5 z-10">
-                  <div className="w-1.5 h-6 bg-white rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-                  <div className="w-1.5 h-10 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-1.5 h-8 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="w-1.5 h-6 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+                <div className="flex items-center gap-1 md:gap-1.5 z-10">
+                  <div className="w-1 h-4 md:w-1.5 md:h-6 bg-white rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+                  <div className="w-1 h-6 md:w-1.5 md:h-10 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-1 h-5 md:w-1.5 md:h-8 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-1 h-4 md:w-1.5 md:h-6 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
                 </div>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 md:h-10 md:w-10 text-white z-10 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-10 md:w-10 text-white z-10 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
               )}
               {isRecording && <div className="absolute inset-0 bg-rose-400 animate-ping opacity-25"></div>}
+              {!isRecording && isHandsFree && <div className="absolute inset-0 bg-emerald-400 animate-pulse opacity-20"></div>}
             </button>
 
             <div className="flex-1 relative hidden sm:block">
@@ -361,23 +447,34 @@ const App: React.FC = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(input)}
-                placeholder={isRecording ? "Listening..." : "Tap the red button to speak..."}
-                className="w-full bg-transparent border-none py-5 px-4 focus:ring-0 outline-none text-lg font-bold placeholder:text-slate-300 text-slate-700"
+                placeholder={isRecording ? (isHandsFree ? "Polyglot is listening hands-free..." : "Polyglot is listening...") : "Tap the mic for hands-free flow..."}
+                className="w-full bg-transparent border-none py-4 md:py-5 px-4 focus:ring-0 outline-none text-base md:text-lg font-bold placeholder:text-slate-300 text-slate-700"
               />
               <button
                 onClick={() => handleSendMessage(input)}
                 disabled={!input.trim() || isLoading}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-indigo-50 text-indigo-600 rounded-2xl disabled:bg-slate-50 disabled:text-slate-300 transition-all active:scale-95"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 md:p-3 bg-indigo-50 text-indigo-600 rounded-xl md:rounded-2xl disabled:bg-slate-50 disabled:text-slate-300 transition-all active:scale-95"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-8 md:w-8" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
                 </svg>
               </button>
             </div>
 
-            {/* Mobile simplified input */}
-            <div className="sm:hidden flex-1 text-center text-sm font-black text-slate-400 tracking-widest">
-              TAP MIC TO START
+            {/* Mobile simplified input / Transcript */}
+            <div className="sm:hidden flex-1 text-center px-2 py-1">
+              {isRecording ? (
+                <div className="flex flex-col items-center">
+                  <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1 animate-pulse">Recording</p>
+                  <p className="text-sm font-bold text-slate-700 line-clamp-1 italic">
+                    {interimTranscript || accumulatedTranscriptRef.current || "..."}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase">
+                  {isHandsFree ? "Hands-Free Active" : "Tap Mic to Start"}
+                </p>
+              )}
             </div>
           </div>
         </div>
