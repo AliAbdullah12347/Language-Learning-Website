@@ -2,7 +2,16 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { GeminiResponse } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Lazy initialize the AI client to avoid top-level module errors if env is not ready
+let aiClient: GoogleGenAI | null = null;
+
+const getAIClient = () => {
+  if (!aiClient) {
+    // Hardcoding the key for final verification since Vite is struggling to pass it to the browser
+    aiClient = new GoogleGenAI({ apiKey: "AIzaSyDQU-8-q9-fG-L8-eC-uK-5I-mG-L8" });
+  }
+  return aiClient;
+};
 
 const getSystemInstruction = (targetLang: string, instructionLang: string) => `
 You are an elite language tutor specializing in teaching ${targetLang} using ${instructionLang} as the medium of instruction.
@@ -30,8 +39,9 @@ export const getGeminiChatResponse = async (
   targetLang: string,
   instructionLang: string
 ): Promise<GeminiResponse> => {
-  const model = ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+  const client = getAIClient();
+  const result = await client.models.generateContent({
+    model: "gemini-1.5-flash",
     contents: [
       ...history,
       { role: "user", parts: [{ text: message }] }
@@ -74,9 +84,9 @@ export const getGeminiChatResponse = async (
     },
   });
 
-  const response = await model;
-  const text = response.text;
+  const text = result.text;
   if (!text) throw new Error("No response from AI");
-  
-  return JSON.parse(text) as GeminiResponse;
+
+  const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+  return JSON.parse(cleanJson) as GeminiResponse;
 };

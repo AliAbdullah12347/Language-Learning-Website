@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getGeminiChatResponse } from './services/geminiService';
 import { ChatMessage, GeminiResponse, Language } from './types';
 import { WordBreakdown } from './components/WordBreakdown';
@@ -36,7 +36,6 @@ const App: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
-  // Session timer
   useEffect(() => {
     let interval: any;
     if (isSessionActive) {
@@ -77,7 +76,7 @@ const App: React.FC = () => {
 
       recognitionRef.current = recognizer;
     }
-  }, [targetLang]);
+  }, [targetLang.code]);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -109,14 +108,14 @@ const App: React.FC = () => {
       }));
 
       const responseData = await getGeminiChatResponse(
-        text, 
-        history, 
-        targetLang.name, 
+        text,
+        history,
+        targetLang.name,
         instructionLang.name
       );
 
       const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + 2).toString(),
         role: 'assistant',
         content: responseData,
         timestamp: new Date(),
@@ -124,12 +123,19 @@ const App: React.FC = () => {
 
       setMessages(prev => [...prev, aiMessage]);
 
-      if (isAutoplay) {
+      if (isAutoplay && responseData.words) {
         const fullText = responseData.words.map(w => w.script).join('');
         speakText(fullText, targetLang.code);
       }
     } catch (error) {
       console.error("Chat error:", error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 3).toString(),
+        role: 'assistant',
+        content: "Sorry, I encountered an error. Please check your API key and connection.",
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -145,7 +151,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
-      {/* Header */}
       <header className="bg-white border-b px-4 py-3 flex items-center justify-between shadow-sm z-20">
         <div className="flex items-center gap-3">
           <div className="bg-indigo-600 text-white p-2 rounded-xl shadow-lg">
@@ -167,10 +172,9 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <button 
+          <button
             onClick={() => setIsAutoplay(!isAutoplay)}
             className={`p-2 rounded-lg transition-colors ${isAutoplay ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}
-            title="Toggle Autoplay Audio"
           >
             {isAutoplay ? (
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -182,10 +186,7 @@ const App: React.FC = () => {
               </svg>
             )}
           </button>
-          <button 
-            onClick={() => setShowSettings(!showSettings)}
-            className="p-2 bg-slate-100 rounded-lg text-slate-600 hover:bg-slate-200"
-          >
+          <button onClick={() => setShowSettings(!showSettings)} className="p-2 bg-slate-100 rounded-lg text-slate-600 hover:bg-slate-200">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
             </svg>
@@ -193,10 +194,9 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Settings Modal */}
       {showSettings && (
-        <div className="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl animate-in slide-in-from-bottom duration-300">
+        <div className="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-slate-800">Learning Settings</h2>
               <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-slate-600">
@@ -205,7 +205,7 @@ const App: React.FC = () => {
                 </svg>
               </button>
             </div>
-            
+
             <div className="space-y-6">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Target Language</label>
@@ -213,8 +213,8 @@ const App: React.FC = () => {
                   {TARGET_LANGUAGES.map((lang) => (
                     <button
                       key={lang.code}
-                      onClick={() => {setTargetLang(lang); setMessages([]); setSessionTime(0); setIsSessionActive(false);}}
-                      className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${targetLang.code === lang.code ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200'}`}
+                      onClick={() => { setTargetLang(lang); setMessages([]); setSessionTime(0); setIsSessionActive(false); }}
+                      className={`flex items-center gap-2 p-3 rounded-xl border-2 ${targetLang.code === lang.code ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100'}`}
                     >
                       <span>{lang.flag}</span>
                       <span className="text-sm font-semibold">{lang.name}</span>
@@ -230,7 +230,7 @@ const App: React.FC = () => {
                     <button
                       key={lang.code}
                       onClick={() => setInstructionLang(lang)}
-                      className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${instructionLang.code === lang.code ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-100 hover:border-slate-200'}`}
+                      className={`flex items-center gap-2 p-3 rounded-xl border-2 ${instructionLang.code === lang.code ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-100'}`}
                     >
                       <span>{lang.flag}</span>
                       <span className="text-sm font-semibold">{lang.name}</span>
@@ -239,10 +239,7 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              <button 
-                onClick={() => setShowSettings(false)}
-                className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-200 active:scale-95 transition-transform"
-              >
+              <button onClick={() => setShowSettings(false)} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold">
                 Save & Continue
               </button>
             </div>
@@ -250,24 +247,20 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 max-w-4xl mx-auto w-full relative">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-8 animate-in fade-in duration-700">
-            <div className="relative">
-              <div className="w-32 h-32 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 relative z-10">
-                <span className="text-4xl">{targetLang.flag}</span>
-              </div>
-              <div className="absolute inset-0 bg-indigo-200 rounded-full animate-ping opacity-25"></div>
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-8">
+            <div className="w-32 h-32 bg-indigo-100 rounded-full flex items-center justify-center text-4xl shadow-inner">
+              {targetLang.flag}
             </div>
             <div className="max-w-md">
               <h2 className="text-3xl font-black text-slate-800 mb-3">Daily 10m Flow</h2>
               <p className="text-slate-500 mb-10 leading-relaxed font-medium">
-                Unlock natural fluency in <strong>{targetLang.name}</strong> by practicing just 10 minutes a day. Use voice or text to start.
+                Unlock natural fluency in <strong>{targetLang.name}</strong> by practicing just 10 minutes a day.
               </p>
-              <button 
+              <button
                 onClick={() => handleSendMessage("Hi, let's start a conversation!")}
-                className="group relative inline-flex items-center justify-center px-10 py-4 font-bold text-white transition-all duration-200 bg-indigo-600 font-pj rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 shadow-xl shadow-indigo-200"
+                className="px-10 py-4 font-bold text-white bg-indigo-600 rounded-full shadow-xl shadow-indigo-200 active:scale-95 transition-transform"
               >
                 Let's Begin!
               </button>
@@ -276,11 +269,8 @@ const App: React.FC = () => {
         )}
 
         {messages.map((message) => (
-          <div 
-            key={message.id} 
-            className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'} space-y-2`}
-          >
-            <div className={`max-w-[90%] md:max-w-[80%] ${message.role === 'user' ? 'order-1' : 'order-2'}`}>
+          <div key={message.id} className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'} space-y-2`}>
+            <div className="max-w-[90%] md:max-w-[80%]">
               {message.role === 'user' ? (
                 <div className="bg-slate-800 text-white px-6 py-4 rounded-3xl rounded-tr-none shadow-md">
                   <p className={`text-lg ${targetLang.isRTL ? 'text-right' : 'text-left'}`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
@@ -288,13 +278,21 @@ const App: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-6 animate-in slide-in-from-left duration-500">
-                  <WordBreakdown 
-                    words={(message.content as GeminiResponse).words} 
-                    fullTranslation={(message.content as GeminiResponse).fullTranslation}
-                    isRTL={targetLang.isRTL}
-                  />
-                  <FeedbackPanel feedback={(message.content as GeminiResponse).feedback} />
+                <div className="space-y-6">
+                  {typeof message.content === 'string' ? (
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-red-100">
+                      <p className="text-red-500">{message.content}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <WordBreakdown
+                        words={message.content.words}
+                        fullTranslation={message.content.fullTranslation}
+                        isRTL={targetLang.isRTL}
+                      />
+                      <FeedbackPanel feedback={message.content.feedback} />
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -304,11 +302,6 @@ const App: React.FC = () => {
         {isLoading && (
           <div className="flex flex-col items-start space-y-2 animate-pulse">
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 w-full max-w-sm">
-              <div className="flex gap-3 mb-4">
-                <div className="h-10 w-12 bg-slate-100 rounded-lg"></div>
-                <div className="h-10 w-12 bg-slate-100 rounded-lg"></div>
-                <div className="h-10 w-12 bg-slate-100 rounded-lg"></div>
-              </div>
               <div className="h-4 w-4/5 bg-slate-100 rounded mb-3"></div>
               <div className="h-4 w-2/3 bg-slate-100 rounded"></div>
             </div>
@@ -317,23 +310,18 @@ const App: React.FC = () => {
         <div ref={chatEndRef} />
       </main>
 
-      {/* Voice Control Section */}
       <footer className="bg-white border-t p-4 md:p-8 shadow-2xl z-30">
         <div className="max-w-2xl mx-auto flex flex-col items-center gap-6">
           <div className="flex items-center gap-6 w-full">
             <button
               onClick={toggleRecording}
-              className={`flex-shrink-0 w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl ${
-                isRecording 
-                  ? 'bg-red-500 scale-110 shadow-red-200' 
-                  : 'bg-indigo-600 hover:bg-indigo-700 hover:scale-105 shadow-indigo-200'
-              }`}
+              className={`flex-shrink-0 w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-2xl ${isRecording ? 'bg-red-500 scale-110' : 'bg-indigo-600 hover:bg-indigo-700'}`}
             >
               {isRecording ? (
                 <div className="flex items-center gap-1">
-                  <div className="w-1.5 h-8 bg-white rounded-full animate-bounce delay-75"></div>
+                  <div className="w-1.5 h-8 bg-white rounded-full animate-bounce"></div>
                   <div className="w-1.5 h-12 bg-white rounded-full animate-bounce"></div>
-                  <div className="w-1.5 h-8 bg-white rounded-full animate-bounce delay-75"></div>
+                  <div className="w-1.5 h-8 bg-white rounded-full animate-bounce"></div>
                 </div>
               ) : (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -348,13 +336,13 @@ const App: React.FC = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(input)}
-                placeholder={isRecording ? "Listening to your voice..." : "Type or click mic to speak..."}
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-full py-5 px-8 text-slate-700 font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none"
+                placeholder={isRecording ? "Listening..." : "Type or click mic..."}
+                className="w-full bg-slate-50 border-2 border-slate-100 rounded-full py-5 px-8 focus:border-indigo-500 outline-none"
               />
               <button
                 onClick={() => handleSendMessage(input)}
                 disabled={!input.trim() || isLoading}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-600 hover:text-indigo-800 disabled:text-slate-300 transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-600 disabled:text-slate-300"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
@@ -362,10 +350,6 @@ const App: React.FC = () => {
               </button>
             </div>
           </div>
-          
-          <p className="text-center text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">
-            {isRecording ? "Release to process speech" : "Tap the mic for hands-free mode"}
-          </p>
         </div>
       </footer>
     </div>
