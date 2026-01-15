@@ -10,29 +10,35 @@ interface Props {
 
 export const WordBreakdown: React.FC<Props> = ({ words, fullTranslation, isRTL }) => {
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 transition-all hover:shadow-md">
-      <div 
-        className={`flex flex-wrap gap-4 mb-6 ${isRTL ? 'flex-row-reverse text-right' : 'flex-row text-left'}`}
+    <div className="bg-white/80 backdrop-blur-md rounded-[2.5rem] p-8 md:p-10 shadow-[0_12px_40px_rgba(0,0,0,0.04)] border border-white transition-all hover:shadow-[0_20px_60px_rgba(0,0,0,0.06)] group/card">
+      <div
+        className={`flex flex-wrap gap-x-6 gap-y-8 mb-10 ${isRTL ? 'flex-row-reverse text-right' : 'flex-row text-left'}`}
         dir={isRTL ? 'rtl' : 'ltr'}
       >
         {words.map((word, idx) => (
-          <div key={idx} className="flex flex-col items-center group min-w-[3rem]">
-            <span className="text-[10px] text-blue-500 font-medium mb-1 opacity-80 group-hover:opacity-100 transition-opacity">
+          <div key={idx} className="flex flex-col items-center group/word relative">
+            {/* Hover Background Effect */}
+            <div className="absolute -inset-x-3 -inset-y-2 bg-indigo-50/0 group-hover/word:bg-indigo-50/50 rounded-2xl transition-all duration-300 -z-10"></div>
+
+            <span className="text-[11px] text-indigo-500 font-extrabold mb-2 opacity-60 group-hover/word:opacity-100 transition-all tracking-tight">
               {word.phonetic}
             </span>
-            <span className={`text-2xl font-bold text-gray-800 mb-1 ${isRTL ? 'font-serif' : 'chinese-text'}`}>
+            <span className={`text-4xl md:text-5xl font-black text-slate-900 mb-2 transition-transform group-hover/word:scale-110 duration-300 ${isRTL ? 'font-serif' : 'tracking-tighter'}`}>
               {word.script}
             </span>
-            <span className="text-[10px] text-gray-400 font-normal">
+            <span className="text-[11px] text-slate-400 font-black uppercase tracking-[0.1em]">
               {word.meaning}
             </span>
           </div>
         ))}
       </div>
-      <div className={`pt-4 border-t border-gray-50 ${isRTL ? 'text-right' : 'text-left'}`}>
-        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Full Meaning</h4>
-        <p className="text-lg text-gray-700 italic leading-relaxed">
-          "{fullTranslation}"
+
+      <div className={`pt-8 border-t border-slate-50 flex flex-col gap-2 ${isRTL ? 'text-right' : 'text-left'}`}>
+        <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Full Translation</h4>
+        <p className="text-xl md:text-2xl text-slate-800 font-bold tracking-tight leading-relaxed">
+          <span className="text-indigo-600 opacity-40 mr-1 italic">"</span>
+          {fullTranslation}
+          <span className="text-indigo-600 opacity-40 ml-1 italic">"</span>
         </p>
       </div>
     </div>

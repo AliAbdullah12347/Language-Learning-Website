@@ -1,6 +1,5 @@
-
 {
-  "name": "Mandarin Flow",
+  "name": "Polyglot",
   "description": "An interactive Mandarin Chinese language learning app that provides word-by-word breakdowns, pinyin, and real-time feedback on your conversation skills.",
   "requestFramePermissions": [
     "microphone"

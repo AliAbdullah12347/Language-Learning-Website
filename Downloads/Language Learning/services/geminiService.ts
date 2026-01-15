@@ -7,15 +7,18 @@ let aiClient: GoogleGenAI | null = null;
 
 const getAIClient = () => {
   if (!aiClient) {
-    // Hardcoding the key for final verification since Vite is struggling to pass it to the browser
-    aiClient = new GoogleGenAI({ apiKey: "AIzaSyDQU-8-q9-fG-L8-eC-uK-5I-mG-L8" });
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("VITE_GEMINI_API_KEY is missing. Ensure .env.local exists, has 'VITE_GEMINI_API_KEY=...', and is UTF-8 encoded.");
+    }
+    aiClient = new GoogleGenAI({ apiKey });
   }
   return aiClient;
 };
 
 const getSystemInstruction = (targetLang: string, instructionLang: string) => `
 You are an elite language tutor specializing in teaching ${targetLang} using ${instructionLang} as the medium of instruction.
-Your goal is to help users practice natural conversation during short 10-minute sessions.
+Your goal is to help users practice natural conversation.
 
 Follow these strict rules for every response:
 1. Respond naturally in ${targetLang}.
@@ -30,7 +33,7 @@ Follow these strict rules for every response:
    - 'mistakes': List any grammatical or lexical mistakes in the user's input.
    - 'suggestions': Provide a more natural way to phrase it in ${targetLang}.
 
-Keep responses concise (1-3 sentences) to maintain a fast flow for a walking learner.
+Keep responses concise (1-3 sentences) to maintain a natural conversation pace.
 `;
 
 export const getGeminiChatResponse = async (
@@ -41,7 +44,7 @@ export const getGeminiChatResponse = async (
 ): Promise<GeminiResponse> => {
   const client = getAIClient();
   const result = await client.models.generateContent({
-    model: "gemini-1.5-flash",
+    model: "gemini-3-flash-preview",
     contents: [
       ...history,
       { role: "user", parts: [{ text: message }] }
