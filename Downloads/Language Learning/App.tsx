@@ -35,16 +35,75 @@ const App: React.FC = () => {
 
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const accumulatedTranscriptRef = useRef('');
+  const isHandsFreeRef = useRef(false);
+  const shouldRestartRef = useRef(true);
+  const isSpeakingRef = useRef(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
-
+  // Update ref when isHandsFree changes
+  useEffect(() => {
+    isHandsFreeRef.current = isHandsFree;
+  }, [isHandsFree]);
 
   const speakText = (text: string, langCode: string) => {
     if (!window.speechSynthesis) return;
+
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = langCode;
+    utterance.rate = 0.9; // Slightly slower for clarity
+
+    // Critical: Track when speech starts and ends
+    utterance.onstart = () => {
+      isSpeakingRef.current = true;
+      // Stop recognition while AI is speaking
+      if (recognitionRef.current && isHandsFreeRef.current) {
+        try {
+          shouldRestartRef.current = false;
+          recognitionRef.current.stop();
+        } catch (e) {
+          console.log("Could not stop recognition:", e);
+        }
+      }
+    };
+
+    utterance.onend = () => {
+      isSpeakingRef.current = false;
+      // Auto-restart recognition after AI finishes speaking (hands-free mode)
+      if (isHandsFreeRef.current && recognitionRef.current) {
+        setTimeout(() => {
+          try {
+            shouldRestartRef.current = true;
+            accumulatedTranscriptRef.current = '';
+            setInterimTranscript('');
+            recognitionRef.current.start();
+          } catch (e) {
+            console.log("Recognition restart after speech:", e);
+          }
+        }, 500); // Small delay to ensure clean transition
+      }
+    };
+
+    utterance.onerror = (event) => {
+      console.error("Speech synthesis error:", event);
+      isSpeakingRef.current = false;
+      // Still try to restart on error in hands-free mode
+      if (isHandsFreeRef.current && recognitionRef.current) {
+        setTimeout(() => {
+          try {
+            shouldRestartRef.current = true;
+            recognitionRef.current.start();
+          } catch (e) {
+            console.log("Could not restart after speech error:", e);
+          }
+        }, 300);
+      }
+    };
+
     window.speechSynthesis.speak(utterance);
   };
 
@@ -58,20 +117,31 @@ const App: React.FC = () => {
 
       recognizer.onstart = () => {
         setIsRecording(true);
-        if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
       };
+
       recognizer.onend = () => {
         setIsRecording(false);
-        // Auto-restart if hands-free is on
-        if (isHandsFree) {
-          try { recognizer.start(); } catch (e) { console.error("Auto-restart failed", e); }
+        // Only auto-restart if hands-free is on AND we should restart (not interrupted by AI speech)
+        if (isHandsFreeRef.current && shouldRestartRef.current && !isSpeakingRef.current) {
+          setTimeout(() => {
+            try {
+              recognizer.start();
+            } catch (e) {
+              console.log("Auto-restart failed:", e);
+              // Try one more time after a longer delay
+              setTimeout(() => {
+                try { recognizer.start(); } catch (e2) { console.error("Second restart failed:", e2); }
+              }, 1000);
+            }
+          }, 300);
         }
       };
 
       recognizer.onresult = (event: any) => {
-        // Interruption detection: if user speaks while AI is talking, stop the AI
-        if (window.speechSynthesis.speaking) {
+        // Interruption detection: if user speaks while AI is talking, stop the AI immediately
+        if (isSpeakingRef.current) {
           window.speechSynthesis.cancel();
+          isSpeakingRef.current = false;
         }
 
         let currentInterim = '';
@@ -88,24 +158,104 @@ const App: React.FC = () => {
         const fullPartial = accumulatedTranscriptRef.current + currentInterim;
         if (fullPartial.trim()) setInput(fullPartial);
 
-        // Silence Detection Logic
-        if (isHandsFree) {
+        // Silence Detection Logic (only in hands-free mode)
+        if (isHandsFreeRef.current) {
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
           silenceTimerRef.current = setTimeout(() => {
             const finalSpeech = accumulatedTranscriptRef.current + currentInterim;
             if (finalSpeech.trim().length > 2) {
-              handleSendMessage(finalSpeech.trim());
+              // Send the message
+              const userMessage: ChatMessage = {
+                id: Date.now().toString(),
+                role: 'user',
+                content: finalSpeech.trim(),
+                timestamp: new Date(),
+              };
+
+              setMessages(prev => [...prev, userMessage]);
+              setInput('');
+              setIsLoading(true);
+
+              // Clear the transcript
               accumulatedTranscriptRef.current = '';
               setInterimTranscript('');
+
+              // Get AI response
+              (async () => {
+                try {
+                  const history = [...messages, userMessage].slice(0, -1).map(m => ({
+                    role: m.role === 'user' ? 'user' as const : 'model' as const,
+                    parts: [{ text: typeof m.content === 'string' ? m.content : (m.content as GeminiResponse).fullTranslation }]
+                  }));
+
+                  const responseData = await getGeminiChatResponse(
+                    finalSpeech.trim(),
+                    history,
+                    targetLang.name,
+                    instructionLang.name
+                  );
+
+                  const aiMessage: ChatMessage = {
+                    id: (Date.now() + 2).toString(),
+                    role: 'assistant',
+                    content: responseData,
+                    timestamp: new Date(),
+                  };
+
+                  setMessages(prev => [...prev, aiMessage]);
+
+                  // Auto-speak the response
+                  if (responseData.words) {
+                    const fullText = responseData.words.map(w => w.script).join('');
+                    speakText(fullText, targetLang.code);
+                  }
+                } catch (error) {
+                  console.error("Chat error:", error);
+                  const errorMessage: ChatMessage = {
+                    id: (Date.now() + 3).toString(),
+                    role: 'assistant',
+                    content: "Sorry, I encountered an error. Please check your API key and connection.",
+                    timestamp: new Date(),
+                  };
+                  setMessages(prev => [...prev, errorMessage]);
+                  // Even on error, restart listening in hands-free
+                  if (isHandsFreeRef.current && !isSpeakingRef.current) {
+                    setTimeout(() => {
+                      try {
+                        accumulatedTranscriptRef.current = '';
+                        setInterimTranscript('');
+                        recognizer.start();
+                      } catch (e) { console.log("Restart after error failed:", e); }
+                    }, 1000);
+                  }
+                } finally {
+                  setIsLoading(false);
+                }
+              })();
             }
-          }, 1800); // 1.8 seconds of silence to trigger response
+          }, 2500); // 2.5 seconds of silence - more natural for conversation
+        }
+      };
+
+      recognizer.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error);
+        // Don't restart on "no-speech" or "aborted" if we're stopping intentionally
+        if (event.error === 'aborted' || (event.error === 'no-speech' && !isHandsFreeRef.current)) {
+          return;
         }
       };
 
       recognitionRef.current = recognizer;
     }
-  }, [targetLang.code, isHandsFree]);
+
+    // Cleanup
+    return () => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+    };
+  }, [targetLang.code, messages]);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -176,35 +326,76 @@ const App: React.FC = () => {
 
   const toggleRecording = () => {
     if (isRecording) {
-      if (isHandsFree) setIsHandsFree(false);
+      // Stopping recording
+      shouldRestartRef.current = false;
+      if (isHandsFree) {
+        setIsHandsFree(false);
+        isHandsFreeRef.current = false;
+      }
       recognitionRef.current?.stop();
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
     } else {
+      // Starting recording (manual mode)
+      shouldRestartRef.current = false; // Manual mode - don't auto-restart
       accumulatedTranscriptRef.current = '';
       setInterimTranscript('');
-      recognitionRef.current?.start();
+      try {
+        recognitionRef.current?.start();
+      } catch (e) {
+        console.log("Failed to start manual recording:", e);
+      }
     }
   };
 
   const toggleHandsFree = () => {
     const newMode = !isHandsFree;
     setIsHandsFree(newMode);
-    if (newMode && !isRecording) {
+
+    if (newMode) {
+      // Entering hands-free mode
+      shouldRestartRef.current = true;
       accumulatedTranscriptRef.current = '';
       setInterimTranscript('');
-      recognitionRef.current?.start();
+
+      if (!isRecording) {
+        try {
+          recognitionRef.current?.start();
+        } catch (e) {
+          console.log("Failed to start recognition in hands-free mode:", e);
+        }
+      }
+    } else {
+      // Exiting hands-free mode
+      shouldRestartRef.current = false;
+      if (isRecording) {
+        recognitionRef.current?.stop();
+      }
+      // Cancel any ongoing speech
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+      }
+      isSpeakingRef.current = false;
     }
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#fdfdff] overflow-hidden font-sans relative selection:bg-indigo-100 selection:text-indigo-600">
-      {/* Dynamic Background */}
+    <div className="flex flex-col min-h-screen max-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-violet-50/30 overflow-hidden font-sans relative selection:bg-indigo-100 selection:text-indigo-600">
+      {/* Enhanced Dynamic Background */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] rounded-full bg-indigo-50/50 blur-[120px] animate-pulse"></div>
-        <div className="absolute top-[40%] -right-[10%] w-[50%] h-[50%] rounded-full bg-violet-50/50 blur-[120px] animate-pulse" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute -top-[10%] -left-[10%] w-[50%] h-[50%] rounded-full bg-gradient-to-br from-indigo-200/40 to-purple-200/40 blur-[120px] animate-pulse"></div>
+        <div className="absolute top-[40%] -right-[10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-violet-200/40 to-pink-200/40 blur-[120px] animate-pulse" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute bottom-[10%] left-[30%] w-[40%] h-[40%] rounded-full bg-gradient-to-br from-blue-200/30 to-cyan-200/30 blur-[120px] animate-pulse" style={{ animationDelay: '4s' }}></div>
+
+        {/* Animated particles */}
+        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-indigo-400/20 rounded-full animate-float"></div>
+        <div className="absolute top-3/4 right-1/4 w-3 h-3 bg-violet-400/20 rounded-full animate-float" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute top-1/2 left-3/4 w-2 h-2 bg-purple-400/20 rounded-full animate-float" style={{ animationDelay: '2.5s' }}></div>
       </div>
 
       {/* Header */}
-      <header className="bg-white/70 backdrop-blur-xl border-b border-white/20 px-4 py-3 md:px-6 md:py-4 flex items-center justify-between shadow-[0_1px_10px_rgba(0,0,0,0.02)] z-30 sticky top-0">
+      <header className="bg-white/80 backdrop-blur-xl border-b border-indigo-100/30 px-3 py-2.5 md:px-6 md:py-3 flex items-center justify-between shadow-[0_4px_20px_rgba(99,102,241,0.08)] z-30 flex-shrink-0">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="bg-white p-1 rounded-2xl shadow-[0_8px_16px_rgba(79,70,229,0.1)] border border-slate-100 overflow-hidden shrink-0">
             <img src="/logo.png" alt="Polyglot Logo" className="h-8 w-8 md:h-9 md:w-9 object-contain" />
@@ -323,38 +514,48 @@ const App: React.FC = () => {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8 space-y-8 md:space-y-10 max-w-4xl mx-auto w-full relative z-10 custom-scrollbar scroll-smooth">
+      <main className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-6 space-y-6 md:space-y-8 max-w-4xl mx-auto w-full relative z-10 custom-scrollbar scroll-smooth" style={{ maxHeight: 'calc(100vh - 180px)' }}>
         {isHandsFree && (
           <div className="sticky top-0 z-20 flex justify-center -mt-2 mb-4 md:-mt-4 md:mb-6">
-            <div className="bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 px-3 py-1 md:px-4 md:py-1.5 rounded-full flex items-center gap-2 shadow-sm animate-in slide-in-from-top-2">
-              <span className="relative flex h-2 w-2">
+            <div className="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 backdrop-blur-md border border-emerald-400/40 px-4 py-2 md:px-5 md:py-2.5 rounded-full flex items-center gap-3 shadow-lg shadow-emerald-500/20 animate-in slide-in-from-top-2">
+              <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-lg shadow-emerald-500/50"></span>
               </span>
-              <span className="text-[9px] md:text-[10px] font-black text-emerald-600 uppercase tracking-widest">Hands-Free Active</span>
+              {isRecording && (
+                <div className="flex items-center gap-0.5">
+                  <div className="w-0.5 h-3 bg-emerald-500 rounded-full" style={{ animation: 'wave 0.6s ease-in-out infinite' }}></div>
+                  <div className="w-0.5 h-4 bg-emerald-500 rounded-full" style={{ animation: 'wave 0.6s ease-in-out infinite', animationDelay: '0.1s' }}></div>
+                  <div className="w-0.5 h-5 bg-emerald-500 rounded-full" style={{ animation: 'wave 0.6s ease-in-out infinite', animationDelay: '0.2s' }}></div>
+                  <div className="w-0.5 h-4 bg-emerald-500 rounded-full" style={{ animation: 'wave 0.6s ease-in-out infinite', animationDelay: '0.3s' }}></div>
+                  <div className="w-0.5 h-3 bg-emerald-500 rounded-full" style={{ animation: 'wave 0.6s ease-in-out infinite', animationDelay: '0.4s' }}></div>
+                </div>
+              )}
+              <span className="text-[10px] md:text-[11px] font-black text-emerald-700 uppercase tracking-widest">Hands-Free {isRecording ? 'Listening' : 'Active'}</span>
             </div>
           </div>
         )}
 
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] md:h-[70vh] text-center space-y-8 md:space-y-10 animate-in fade-in zoom-in duration-700 py-10">
-            <div className="relative group">
-              <div className="absolute inset-0 bg-indigo-600 rounded-full blur-[40px] opacity-20 group-hover:opacity-40 transition-opacity"></div>
-              <div className="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center text-5xl md:text-6xl shadow-[0_12px_40px_rgba(0,0,0,0.08)] relative z-10 border border-slate-50 transition-transform hover:scale-105 duration-500">
+          <div className="flex flex-col items-center justify-center text-center space-y-6 md:space-y-8 animate-in fade-in zoom-in duration-700" style={{ minHeight: 'calc(100vh - 280px)' }}>
+            <div className="relative group animate-float">
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-full blur-[60px] opacity-30 group-hover:opacity-50 transition-all duration-500"></div>
+              <div className="w-28 h-28 md:w-36 md:h-36 bg-gradient-to-br from-white to-indigo-50 rounded-full flex items-center justify-center text-5xl md:text-6xl shadow-[0_20px_60px_rgba(99,102,241,0.15)] relative z-10 border-2 border-white transition-all hover:scale-110 duration-500 group-hover:shadow-[0_30px_80px_rgba(99,102,241,0.25)]">
                 {targetLang.flag}
               </div>
             </div>
             <div className="max-w-md px-4">
-              <h2 className="text-3xl md:text-4xl font-black text-slate-900 mb-4 tracking-tighter leading-tight">Master {targetLang.name.split(' ')[0]} <br /><span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent italic">Naturally.</span></h2>
-              <p className="text-slate-500 mb-8 md:mb-12 text-base md:text-lg font-medium leading-relaxed">
+              <h2 className="text-2xl md:text-4xl font-black text-slate-900 mb-3 tracking-tighter leading-tight">Master {targetLang.name.split(' ')[0]} <br /><span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-600 bg-clip-text text-transparent italic animate-gradient">Naturally.</span></h2>
+              <p className="text-slate-600 mb-6 md:mb-8 text-sm md:text-lg font-semibold leading-relaxed">
                 Achieve fluency through immersive conversation. Direct, intuitive, and fun.
               </p>
               <button
                 onClick={() => handleSendMessage("Hi, let's start a conversation!")}
-                className="group px-8 md:px-12 py-4 md:py-5 font-black text-white bg-indigo-600 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_20px_40px_rgba(79,70,229,0.3)] hover:shadow-[0_25px_50px_rgba(79,70,229,0.4)] hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-3 mx-auto"
+                className="group px-6 md:px-10 py-3.5 md:py-4 font-black text-white bg-gradient-to-r from-indigo-600 to-violet-600 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_20px_50px_rgba(79,70,229,0.4)] hover:shadow-[0_30px_60px_rgba(79,70,229,0.5)] hover:scale-105 active:scale-95 transition-all flex items-center gap-3 mx-auto relative overflow-hidden animate-gradient"
               >
-                START LEARNING
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transition-transform group-hover:translate-x-1" viewBox="0 0 20 20" fill="currentColor">
+                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <span className="relative z-10">START LEARNING</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transition-transform group-hover:translate-x-1 relative z-10" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
               </button>
@@ -418,27 +619,28 @@ const App: React.FC = () => {
       </main>
 
       {/* Footer / Input Bar */}
-      <footer className="bg-white/70 backdrop-blur-2xl border-t border-white/20 p-4 md:p-6 lg:p-8 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] z-40 relative sticky bottom-0">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-4 md:gap-8">
-          <div className="flex items-center gap-3 md:gap-8 w-full bg-white/50 backdrop-blur-md p-2 md:p-4 rounded-[2.5rem] md:rounded-[3rem] border border-white shadow-[0_20px_50px_rgba(0,0,0,0.05)] ring-1 ring-slate-100 transition-all focus-within:ring-4 focus-within:ring-indigo-100">
+      <footer className="bg-white/80 backdrop-blur-2xl border-t border-indigo-100/30 p-3 md:p-4 lg:p-5 shadow-[0_-10px_40px_rgba(99,102,241,0.08)] z-40 flex-shrink-0">
+        <div className="max-w-3xl mx-auto flex flex-col items-center gap-2 md:gap-4">
+          <div className="flex items-center gap-2 md:gap-6 w-full bg-gradient-to-r from-white/60 to-indigo-50/40 backdrop-blur-md p-2 md:p-3 rounded-[2rem] md:rounded-[2.5rem] border border-indigo-100/50 shadow-[0_10px_40px_rgba(99,102,241,0.1)] ring-1 ring-indigo-50 transition-all focus-within:ring-4 focus-within:ring-indigo-200 focus-within:shadow-[0_20px_60px_rgba(99,102,241,0.15)]">
             <button
               onClick={toggleRecording}
-              className={`flex-shrink-0 w-14 h-14 md:w-20 md:h-20 rounded-full flex items-center justify-center transition-all shadow-xl md:shadow-2xl relative overflow-hidden group ${isRecording ? 'bg-rose-500 scale-105 md:scale-110 active:scale-100' : (isHandsFree ? 'bg-emerald-600 hover:bg-emerald-700 active:scale-95' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95')}`}
+              className={`flex-shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all shadow-2xl relative overflow-hidden group ${isRecording ? 'bg-gradient-to-br from-rose-500 to-pink-600 scale-110 active:scale-100' : (isHandsFree ? 'bg-gradient-to-br from-emerald-500 to-teal-600 hover:scale-105 active:scale-95' : 'bg-gradient-to-br from-indigo-600 to-violet-600 hover:scale-105 active:scale-95')}`}
             >
               {isRecording ? (
-                <div className="flex items-center gap-1 md:gap-1.5 z-10">
-                  <div className="w-1 h-4 md:w-1.5 md:h-6 bg-white rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-                  <div className="w-1 h-6 md:w-1.5 md:h-10 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-1 h-5 md:w-1.5 md:h-8 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="w-1 h-4 md:w-1.5 md:h-6 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+                <div className="flex items-center gap-0.5 md:gap-1 z-10">
+                  <div className="w-0.5 h-3 md:w-1 md:h-5 bg-white rounded-full" style={{ animation: 'wave 0.6s ease-in-out infinite' }}></div>
+                  <div className="w-0.5 h-5 md:w-1 md:h-8 bg-white rounded-full" style={{ animation: 'wave 0.6s ease-in-out infinite', animationDelay: '0.1s' }}></div>
+                  <div className="w-0.5 h-6 md:w-1 md:h-10 bg-white rounded-full" style={{ animation: 'wave 0.6s ease-in-out infinite', animationDelay: '0.2s' }}></div>
+                  <div className="w-0.5 h-5 md:w-1 md:h-8 bg-white rounded-full" style={{ animation: 'wave 0.6s ease-in-out infinite', animationDelay: '0.3s' }}></div>
+                  <div className="w-0.5 h-3 md:w-1 md:h-5 bg-white rounded-full" style={{ animation: 'wave 0.6s ease-in-out infinite', animationDelay: '0.4s' }}></div>
                 </div>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-10 md:w-10 text-white z-10 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:h-8 md:w-8 text-white z-10 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
               )}
-              {isRecording && <div className="absolute inset-0 bg-rose-400 animate-ping opacity-25"></div>}
-              {!isRecording && isHandsFree && <div className="absolute inset-0 bg-emerald-400 animate-pulse opacity-20"></div>}
+              {isRecording && <div className="absolute inset-0 rounded-full" style={{ animation: 'ripple 1.5s ease-out infinite', background: 'radial-gradient(circle, rgba(244,63,94,0.6) 0%, transparent 70%)' }}></div>}
+              {!isRecording && isHandsFree && <div className="absolute inset-0 bg-emerald-400/30 animate-pulse rounded-full"></div>}
             </button>
 
             <div className="flex-1 relative hidden sm:block">
@@ -448,12 +650,12 @@ const App: React.FC = () => {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(input)}
                 placeholder={isRecording ? (isHandsFree ? "Polyglot is listening hands-free..." : "Polyglot is listening...") : "Tap the mic for hands-free flow..."}
-                className="w-full bg-transparent border-none py-4 md:py-5 px-4 focus:ring-0 outline-none text-base md:text-lg font-bold placeholder:text-slate-300 text-slate-700"
+                className="w-full bg-transparent border-none py-3 md:py-4 px-3 focus:ring-0 outline-none text-sm md:text-base font-bold placeholder:text-slate-400 placeholder:italic text-slate-700"
               />
               <button
                 onClick={() => handleSendMessage(input)}
                 disabled={!input.trim() || isLoading}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 md:p-3 bg-indigo-50 text-indigo-600 rounded-xl md:rounded-2xl disabled:bg-slate-50 disabled:text-slate-300 transition-all active:scale-95"
+                className="absolute right-1 top-1/2 -translate-y-1/2 p-2 md:p-2.5 bg-gradient-to-br from-indigo-100 to-violet-100 text-indigo-600 rounded-xl md:rounded-2xl disabled:bg-slate-50 disabled:text-slate-300 transition-all active:scale-95 hover:scale-105 hover:shadow-lg disabled:hover:scale-100 disabled:hover:shadow-none"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-8 md:w-8" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
