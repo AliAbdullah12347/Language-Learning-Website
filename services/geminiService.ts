@@ -26,10 +26,11 @@ Follow these strict rules for every response:
    - 'script': The ${targetLang} script (e.g., Arabic characters, Hanzi, etc.).
    - 'phonetic': A transliteration or phonetic guide (e.g., Pinyin for Chinese, Romanization for Arabic).
    - 'meaning': The specific translation in ${instructionLang} for that word/phrase.
+   Do NOT include any standalone punctuation marks (such as commas, full stops, periods, question marks, exclamation marks) in the 'words' breakdown array.
 3. Provide a 'fullTranslation' which is the holistic, natural ${instructionLang} meaning of your entire response.
 4. In the 'feedback' section (all text in ${instructionLang}):
    - 'userInput': Transcribe what you think the user said in ${targetLang}.
-   - 'aiUnderstood': Briefly explain what you understood the user's intent to be.
+   - 'aiUnderstood': Briefly explain what you understood the user's intent to be (translate the user's words into ${instructionLang}).
    - 'mistakes': List any grammatical or lexical mistakes in the user's input.
    - 'suggestions': Provide a more natural way to phrase it in ${targetLang}.
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getGeminiChatResponse } from './services/geminiService';
-import { ChatMessage, GeminiResponse, Language } from './types';
-import { WordBreakdown } from './components/WordBreakdown';
+import { ChatMessage, GeminiResponse, Language, WordBreakdown } from './types';
+import { WordBreakdown as WordBreakdownComp } from './components/WordBreakdown';
 import { FeedbackPanel } from './components/FeedbackPanel';
 
 const TARGET_LANGUAGES: Language[] = [
@@ -19,6 +19,12 @@ const INSTRUCTION_LANGUAGES: Language[] = [
   { code: 'fr-FR', name: 'French', flag: '🇫🇷' },
   { code: 'de-DE', name: 'German', flag: '🇩🇪' },
 ];
+
+// Helper to reconstruct target language scripts dynamically
+const joinTargetScript = (words: WordBreakdown[], langCode: string) => {
+  const isSpaceLang = !['zh-CN', 'ja-JP'].includes(langCode);
+  return words.map(w => w.script).join(isSpaceLang ? ' ' : '');
+};
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -303,7 +309,7 @@ const App: React.FC = () => {
       setMessages(prev => [...prev, aiMessage]);
 
       if (isAutoplay && responseData.words) {
-        const fullText = responseData.words.map(w => w.script).join('');
+        const fullText = joinTargetScript(responseData.words, targetLang.code);
         speakText(fullText, targetLang.code);
       } else {
         setConversationState('idle');
@@ -402,6 +408,47 @@ const App: React.FC = () => {
     }
   };
 
+  // Renders a high-contrast transition banner right under the header
+  const getStatusBanner = () => {
+    switch (conversationState) {
+      case 'listening':
+        return (
+          <div className="w-full bg-emerald-50 border-y border-emerald-150 py-2.5 text-center animate-in slide-in-from-top duration-300 z-20 flex-shrink-0">
+            <span className="text-[10px] font-black tracking-[0.2em] text-emerald-700 uppercase flex items-center justify-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+              Live Mic Active — Speak in {targetLang.name}
+            </span>
+          </div>
+        );
+      case 'thinking':
+        return (
+          <div className="w-full bg-indigo-50 border-y border-indigo-150 py-2.5 text-center animate-in slide-in-from-top duration-300 z-20 flex-shrink-0">
+            <span className="text-[10px] font-black tracking-[0.2em] text-indigo-700 uppercase flex items-center justify-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+              AI Tutor is analyzing your voice input...
+            </span>
+          </div>
+        );
+      case 'speaking':
+        return (
+          <div className="w-full bg-blue-50 border-y border-blue-150 py-2.5 text-center animate-in slide-in-from-top duration-300 z-20 flex-shrink-0">
+            <span className="text-[10px] font-black tracking-[0.2em] text-blue-700 uppercase flex items-center justify-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
+              Tutor is speaking
+            </span>
+          </div>
+        );
+      default:
+        return (
+          <div className="w-full bg-slate-100 border-y border-slate-200 py-2.5 text-center z-20 flex-shrink-0">
+            <span className="text-[10px] font-black tracking-[0.2em] text-slate-500 uppercase">
+              Standby — Tap the Orb to start practicing
+            </span>
+          </div>
+        );
+    }
+  };
+
   // Get latest AI reply data
   const latestAIReply = [...messages]
     .reverse()
@@ -482,6 +529,9 @@ const App: React.FC = () => {
         </div>
       </header>
 
+      {/* Dynamic Status Transition Banner */}
+      {getStatusBanner()}
+
       {/* Main Study Zone */}
       <main className="flex-1 flex flex-col items-center justify-between p-4 md:p-8 relative z-10 overflow-hidden" style={{ minHeight: 0 }}>
         
@@ -521,13 +571,13 @@ const App: React.FC = () => {
           </div>
         ) : (
           /* Conversational Portal Zone (Light Theme & Overlap Resolved) */
-          <div className="flex-1 w-full max-w-xl flex flex-col justify-between items-center py-4 md:py-6 overflow-hidden" style={{ minHeight: 0 }}>
+          <div className="flex-1 w-full max-w-3xl flex flex-col justify-between items-center py-4 md:py-6 overflow-hidden" style={{ minHeight: 0 }}>
             
             {/* The Conversational Orb Widget */}
             <div className="flex-1 flex flex-col items-center justify-center space-y-6 min-h-0 w-full">
               
               {/* Outer Orb Layout */}
-              <div className="relative flex items-center justify-center w-36 h-36 md:w-44 md:h-44">
+              <div className="relative flex items-center justify-center w-36 h-36 md:w-44 md:h-44 flex-shrink-0">
                 {/* Listening Pulsating Rings */}
                 {conversationState === 'listening' && (
                   <>
@@ -570,7 +620,7 @@ const App: React.FC = () => {
               </div>
 
               {/* Status Label & Active Transcripts */}
-              <div className="text-center space-y-3 px-4 w-full">
+              <div className="text-center space-y-3 px-4 w-full flex-1 flex flex-col justify-center min-h-0">
                 <span className={`text-[10px] font-black uppercase tracking-[0.25em] ${
                   conversationState === 'listening' ? 'text-emerald-600' :
                   conversationState === 'thinking' ? 'text-indigo-600 animate-pulse' :
@@ -594,33 +644,55 @@ const App: React.FC = () => {
                   </p>
                 )}
 
-                {/* Speaking/Latest AI Text Card (Perfect Light Theme with Replay) */}
+                {/* Speaking/Latest AI Text Card (Split screen layout) */}
                 {conversationState !== 'listening' && conversationState !== 'thinking' && latestAIReply && (
-                  <div className="max-w-md mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-1">
+                  <div className="w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
                     {typeof latestAIReply.content === 'string' ? (
-                      <p className="text-sm font-semibold text-rose-600">{latestAIReply.content}</p>
+                      <p className="text-sm font-semibold text-rose-600 text-center">{latestAIReply.content}</p>
                     ) : (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-center gap-2">
-                          <p className={`text-xl md:text-2xl font-black text-slate-800 ${targetLang.isRTL ? 'font-serif text-right' : 'text-left'}`}>
-                            {latestAIReply.content.words.map(w => w.script).join('')}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full mt-2">
+                        
+                        {/* LEFT COLUMN: AI's Reply (Output) */}
+                        <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-2 text-left">
+                          <span className="text-[9px] font-black uppercase text-indigo-500 tracking-wider">Tutor Response</span>
+                          <div className="flex items-center gap-2">
+                            <p className={`text-base md:text-lg font-black text-slate-800 ${targetLang.isRTL ? 'font-serif text-right' : 'text-left'} leading-tight`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
+                              {joinTargetScript(latestAIReply.content.words, targetLang.code)}
+                            </p>
+                            <button 
+                              onClick={() => handleReplayVoice(joinTargetScript((latestAIReply.content as GeminiResponse).words, targetLang.code))}
+                              className="p-1 text-slate-400 hover:text-indigo-650 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="Replay Voice"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </div>
+                          <p className="text-[10px] md:text-xs text-indigo-600 font-bold tracking-wide">
+                            {latestAIReply.content.words.map(w => w.phonetic).join(' ')}
                           </p>
-                          <button 
-                            onClick={() => handleReplayVoice(latestAIReply.content.words.map(w => w.script).join(''))}
-                            className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
-                            title="Replay Voice"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                            </svg>
-                          </button>
+                          <p className="text-xs text-slate-500 font-semibold italic">
+                            "{latestAIReply.content.fullTranslation}"
+                          </p>
                         </div>
-                        <p className="text-[10px] md:text-xs text-indigo-600 font-bold tracking-wide">
-                          {latestAIReply.content.words.map(w => w.phonetic).join(' ')}
-                        </p>
-                        <p className="text-xs text-slate-500 font-semibold italic">
-                          "{latestAIReply.content.fullTranslation}"
-                        </p>
+
+                        {/* RIGHT COLUMN: What Tutor Understood from User (Explanation) */}
+                        <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-2 text-left">
+                          <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider">What I Understood You Said</span>
+                          <p className={`text-base md:text-lg font-black text-slate-800 leading-tight ${targetLang.isRTL ? 'text-right' : 'text-left'}`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
+                            {latestAIReply.content.feedback.userInput}
+                          </p>
+                          <p className="text-xs text-slate-500 font-semibold italic">
+                            "{latestAIReply.content.feedback.aiUnderstood}"
+                          </p>
+                          {latestAIReply.content.feedback.mistakes.length > 0 && (
+                            <span className="text-[9px] font-bold text-rose-500 flex items-center gap-1 mt-1">
+                              <span>⚠️ Refinement needed</span>
+                            </span>
+                          )}
+                        </div>
+
                       </div>
                     )}
                   </div>
@@ -634,7 +706,7 @@ const App: React.FC = () => {
                 onClick={() => setShowHistory(true)}
                 className="my-3 px-6 py-3 bg-white hover:bg-slate-50 border border-slate-200/80 text-indigo-600 font-bold rounded-2xl shadow-sm hover:shadow-md transition-all text-xs flex items-center gap-2 flex-shrink-0"
               >
-                <span>Review Feedback & Insights</span>
+                <span>Review Vocabulary Breakdown & Full Insights</span>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
@@ -648,7 +720,7 @@ const App: React.FC = () => {
 
       {/* DETAILED FULL STUDY REVIEW PANEL (Clean Light Theme Slide-up Sheet) */}
       {showHistory && (
-        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex flex-col justify-end animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-md flex flex-col justify-end animate-in fade-in duration-300">
           <div className="bg-white w-full h-[85%] rounded-t-[2.5rem] flex flex-col shadow-[0_-15px_40px_rgba(0,0,0,0.1)] overflow-hidden">
             <header className="bg-white border-b border-slate-100 px-6 py-5 flex items-center justify-between">
               <div>
@@ -699,7 +771,7 @@ const App: React.FC = () => {
 
                                   return (
                                     <div key={wIdx} className="flex flex-col items-center bg-slate-50 border border-slate-200/80 px-3.5 py-2.5 rounded-2xl min-w-[75px]">
-                                      <span className="text-[9px] text-indigo-600 font-extrabold mb-1">{word.phonetic}</span>
+                                      <span className="text-[9px] text-indigo-650 font-extrabold mb-1">{word.phonetic}</span>
                                       <span className="text-lg font-black text-slate-800 mb-1">{word.script}</span>
                                       <span className="text-[9px] text-slate-500 font-black uppercase tracking-tight">{word.meaning}</span>
                                     </div>
