@@ -3,8 +3,8 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Polyglot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Polyglot - AI Conversational Language Tutor</title>
   <link rel="icon" type="image/png" href="/logo.png" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,21 +18,40 @@
 
     * {
       -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
 
-    body {
-      font-family: var(--font-sans);
+    html, body {
+      height: 100%;
       margin: 0;
       padding: 0;
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: touch;
+      font-family: var(--font-sans);
       background: #f8fafc;
       color: #0f172a;
       overflow: hidden;
-      overscroll-behavior: none;
+    }
+
+    #root {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Safe Area Padding Helpers */
+    .safe-padding-bottom {
+      padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+
+    .safe-padding-top {
+      padding-top: max(0.5rem, env(safe-area-inset-top));
     }
 
     /* Custom Scrollbar */
     ::-webkit-scrollbar {
-      width: 8px;
+      width: 6px;
+      height: 6px;
     }
 
     ::-webkit-scrollbar-track {
@@ -54,25 +73,53 @@
       color: white;
     }
 
-    /* Custom Animations */
+    /* Orb Animations & Ripple Effects */
+    @keyframes orbBreath {
+      0%, 100% {
+        transform: scale(1) rotate(0deg);
+        box-shadow: 0 0 40px rgba(99, 102, 241, 0.25), inset 0 0 20px rgba(255, 255, 255, 0.4);
+      }
+      50% {
+        transform: scale(1.05) rotate(180deg);
+        box-shadow: 0 0 60px rgba(99, 102, 241, 0.4), inset 0 0 30px rgba(255, 255, 255, 0.6);
+      }
+    }
+
+    @keyframes orbSpin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes rippleTeal {
+      0% {
+        transform: scale(0.9);
+        opacity: 0.8;
+      }
+      100% {
+        transform: scale(1.8);
+        opacity: 0;
+      }
+    }
+
+    @keyframes rippleBlue {
+      0% {
+        transform: scale(0.9);
+        opacity: 0.8;
+      }
+      100% {
+        transform: scale(2);
+        opacity: 0;
+      }
+    }
+
     @keyframes float {
       0%, 100% { transform: translateY(0px); }
-      50% { transform: translateY(-20px); }
-    }
-
-    @keyframes shimmer {
-      0% { background-position: -1000px 0; }
-      100% { background-position: 1000px 0; }
-    }
-
-    @keyframes glow {
-      0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
-      50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.6); }
+      50% { transform: translateY(-12px); }
     }
 
     @keyframes wave {
-      0%, 100% { transform: scaleY(1); }
-      50% { transform: scaleY(1.5); }
+      0%, 100% { transform: scaleY(0.4); }
+      50% { transform: scaleY(1.4); }
     }
 
     @keyframes gradientShift {
@@ -81,55 +128,38 @@
       100% { background-position: 0% 50%; }
     }
 
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+    .animate-orb-breath {
+      animation: orbBreath 8s ease-in-out infinite;
     }
 
-    @keyframes slideInRight {
-      from {
-        opacity: 0;
-        transform: translateX(50px);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
-    }
-
-    @keyframes ripple {
-      0% {
-        transform: scale(0.8);
-        opacity: 1;
-      }
-      100% {
-        transform: scale(2.4);
-        opacity: 0;
-      }
+    .animate-orb-spin {
+      animation: orbSpin 2s linear infinite;
     }
 
     .animate-float {
-      animation: float 6s ease-in-out infinite;
-    }
-
-    .animate-glow {
-      animation: glow 2s ease-in-out infinite;
+      animation: float 5s ease-in-out infinite;
     }
 
     .animate-gradient {
       background-size: 200% 200%;
-      animation: gradientShift 8s ease infinite;
+      animation: gradientShift 6s ease infinite;
     }
 
-    /* Smooth transitions */
+    /* Waveform Animation Heights */
+    .wave-bar-1 { animation: wave 0.8s ease-in-out infinite; }
+    .wave-bar-2 { animation: wave 0.8s ease-in-out infinite 0.15s; }
+    .wave-bar-3 { animation: wave 0.8s ease-in-out infinite 0.3s; }
+    .wave-bar-4 { animation: wave 0.8s ease-in-out infinite 0.45s; }
+    .wave-bar-5 { animation: wave 0.8s ease-in-out infinite 0.6s; }
+
+    /* Prevent text sizes from resizing automatically on mobile orientation change */
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
+
+    /* Custom smooth transition override */
     * {
-      transition: background-color 0.2s ease, color 0.2s ease;
+      transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
   </style>
 </head>
