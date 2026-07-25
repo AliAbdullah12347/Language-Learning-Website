@@ -69,19 +69,19 @@
 
     /* Selection Color */
     ::selection {
-      background: #6366f1;
-      color: white;
+      background: #c7d2fe;
+      color: #4f46e5;
     }
 
     /* Orb Animations & Ripple Effects */
     @keyframes orbBreath {
       0%, 100% {
         transform: scale(1) rotate(0deg);
-        box-shadow: 0 0 40px rgba(99, 102, 241, 0.25), inset 0 0 20px rgba(255, 255, 255, 0.4);
+        box-shadow: 0 0 30px rgba(99, 102, 241, 0.15), inset 0 0 15px rgba(255, 255, 255, 0.5);
       }
       50% {
-        transform: scale(1.05) rotate(180deg);
-        box-shadow: 0 0 60px rgba(99, 102, 241, 0.4), inset 0 0 30px rgba(255, 255, 255, 0.6);
+        transform: scale(1.04) rotate(180deg);
+        box-shadow: 0 0 45px rgba(99, 102, 241, 0.25), inset 0 0 20px rgba(255, 255, 255, 0.7);
       }
     }
 
@@ -93,10 +93,10 @@
     @keyframes rippleTeal {
       0% {
         transform: scale(0.9);
-        opacity: 0.8;
+        opacity: 0.6;
       }
       100% {
-        transform: scale(1.8);
+        transform: scale(1.7);
         opacity: 0;
       }
     }
@@ -104,17 +104,17 @@
     @keyframes rippleBlue {
       0% {
         transform: scale(0.9);
-        opacity: 0.8;
+        opacity: 0.6;
       }
       100% {
-        transform: scale(2);
+        transform: scale(1.8);
         opacity: 0;
       }
     }
 
     @keyframes float {
       0%, 100% { transform: translateY(0px); }
-      50% { transform: translateY(-12px); }
+      50% { transform: translateY(-8px); }
     }
 
     @keyframes wave {
@@ -151,6 +151,20 @@
     .wave-bar-3 { animation: wave 0.8s ease-in-out infinite 0.3s; }
     .wave-bar-4 { animation: wave 0.8s ease-in-out infinite 0.45s; }
     .wave-bar-5 { animation: wave 0.8s ease-in-out infinite 0.6s; }
+
+    /* Hide Vercel Toolbar Injections Completely */
+    vercel-live-feedback, 
+    #vercel-live-feedback, 
+    [id*="vercel-live-feedback"],
+    [class*="vercel-live-feedback"],
+    iframe[src*="vercel"] {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
 
     /* Prevent text sizes from resizing automatically on mobile orientation change */
     html {
