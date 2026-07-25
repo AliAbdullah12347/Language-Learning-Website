@@ -383,7 +383,7 @@ const App: React.FC = () => {
       }
       isSpeakingRef.current = false;
     } else {
-      // Activating hands-free
+      // Activate hands-free
       setIsHandsFree(true);
       isHandsFreeRef.current = true;
       shouldRestartRef.current = true;
@@ -411,7 +411,7 @@ const App: React.FC = () => {
       case 'listening': return 'Listening for speech...';
       case 'thinking': return 'Analyzing conversational cues...';
       case 'speaking': return 'Speaking...';
-      default: return 'Tap Mic to speak';
+      default: return 'Tap Orb to speak';
     }
   };
 
@@ -497,7 +497,7 @@ const App: React.FC = () => {
             <button
               onClick={() => { unlockAudioContext(); setShowHistory(true); }}
               title="Review Insights & Vocabulary"
-              className="p-2.5 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-2xl text-indigo-600 transition-all active:scale-95 shadow-sm relative"
+              className="p-2.5 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-2xl text-indigo-600 transition-all active:scale-95 shadow-sm relative animate-bounce"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
@@ -557,174 +557,160 @@ const App: React.FC = () => {
       {/* Dynamic Status Transition Banner */}
       {getStatusBanner()}
 
-      {/* Main Study Zone */}
-      <main className="flex-1 flex flex-col items-center justify-between p-4 md:p-8 relative z-10 overflow-hidden" style={{ minHeight: 0 }}>
+      {/* Main Study Zone (Scrollable to prevent clips/overlaps on short viewports like iPhone Safari) */}
+      <main className="flex-1 overflow-y-auto w-full max-w-3xl mx-auto px-4 py-6 flex flex-col items-center justify-start space-y-6 relative z-10 scroll-smooth" style={{ minHeight: 0 }}>
         
-        {/* Zero-State Layout */}
-        {messages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8 animate-in fade-in zoom-in duration-700 max-w-md mx-auto">
-            <div className="relative group animate-float">
-              {/* Outer radial glow */}
-              <div className="absolute inset-0 bg-indigo-200/40 rounded-full blur-[50px] group-hover:bg-indigo-300/40 transition-all duration-500"></div>
-              
-              <div className="w-24 h-24 md:w-28 md:h-28 bg-white rounded-full flex items-center justify-center text-4xl shadow-[0_15px_35px_rgba(99,102,241,0.12)] relative z-10 border border-slate-100 transition-all hover:scale-105 duration-300">
-                {targetLang.flag}
+        {/* The Conversational Orb Widget (Always rendered at the top of the viewport for visual continuity) */}
+        <div className="flex flex-col items-center justify-center space-y-4 w-full flex-shrink-0 mt-2">
+          <div className="relative flex items-center justify-center w-36 h-36 md:w-44 md:h-44 flex-shrink-0">
+            {/* Listening Pulsating Rings */}
+            {conversationState === 'listening' && (
+              <>
+                <div className="absolute inset-0 rounded-full border border-emerald-400/50 animate-[rippleTeal_2.5s_ease-out_infinite]"></div>
+                <div className="absolute inset-0 rounded-full border border-emerald-400/25 animate-[rippleTeal_2.5s_ease-out_infinite_1.25s]"></div>
+              </>
+            )}
+
+            {/* Speaking Concentric Waves */}
+            {conversationState === 'speaking' && (
+              <>
+                <div className="absolute inset-0 rounded-full border border-indigo-400/50 animate-[rippleBlue_2.5s_ease-out_infinite]"></div>
+                <div className="absolute inset-0 rounded-full border border-indigo-400/25 animate-[rippleBlue_2.5s_ease-out_infinite_1.25s]"></div>
+              </>
+            )}
+
+            {/* The Center Orb Element */}
+            <div 
+              onClick={handleMicClick}
+              className={`w-24 h-24 md:w-28 md:h-28 rounded-full cursor-pointer flex items-center justify-center relative z-10 transition-all duration-500 border shadow-xl active:scale-95 ${
+                conversationState === 'listening' ? 'bg-gradient-to-br from-emerald-500 to-teal-600 border-emerald-400/20 text-white shadow-emerald-250/20' :
+                conversationState === 'thinking' ? 'bg-white border-indigo-150/40 text-indigo-650' :
+                conversationState === 'speaking' ? 'bg-white border-indigo-150/40 text-indigo-600 shadow-indigo-100/40' :
+                'bg-gradient-to-br from-indigo-500 to-violet-600 border-indigo-400/20 text-white hover:scale-105'
+              }`}
+            >
+              {/* Outer spinning dash loader if thinking */}
+              {conversationState === 'thinking' && (
+                <div className="absolute -inset-1.5 rounded-full border-[3px] border-t-indigo-500 border-r-transparent border-b-purple-500 border-l-transparent animate-orb-spin"></div>
+              )}
+
+              {/* Inside Icons / Flags */}
+              <div className="text-3xl md:text-4xl select-none animate-orb-breath">
+                {conversationState === 'speaking' ? '🗣️' : 
+                 conversationState === 'listening' ? '🎤' : 
+                 conversationState === 'thinking' ? '🧠' : 
+                 targetLang.flag}
               </div>
             </div>
+          </div>
 
-            <div className="space-y-4">
-              <h2 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">
+          {/* Status Label */}
+          <span className={`text-[10px] font-black uppercase tracking-[0.25em] ${
+            conversationState === 'listening' ? 'text-emerald-600' :
+            conversationState === 'thinking' ? 'text-indigo-600 animate-pulse' :
+            conversationState === 'speaking' ? 'text-indigo-600' :
+            'text-slate-400'
+          }`}>
+            {getFeedbackLabel()}
+          </span>
+        </div>
+
+        {/* Content Zone (Differentiates between Welcome and Active Output below the Orb) */}
+        {messages.length === 0 ? (
+          /* Welcome Card */
+          <div className="w-full max-w-md text-center space-y-6 animate-in fade-in duration-500 mx-auto">
+            <div className="space-y-3">
+              <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">
                 Master {targetLang.name.split(' ')[0]} <br />
                 <span className="bg-gradient-to-r from-indigo-650 via-purple-600 to-pink-500 bg-clip-text text-transparent italic animate-gradient">
                   Through Voice.
                 </span>
               </h2>
-              <p className="text-slate-500 text-sm md:text-base font-semibold leading-relaxed">
+              <p className="text-slate-500 text-xs md:text-sm font-semibold leading-relaxed">
                 Experience a truly hands-free language learning conversational flow. Just speak naturally.
               </p>
             </div>
 
             <button
               onClick={handleStartLearning}
-              className="group w-full max-w-xs py-4 px-6 font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-2xl shadow-[0_10px_20px_-4px_rgba(99,102,241,0.35)] active:scale-[0.98] transition-all flex items-center justify-center gap-3 relative overflow-hidden"
+              className="group w-full max-w-xs py-3.5 px-6 font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-2xl shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-3 mx-auto"
             >
               <span>START LEARNING</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transition-transform group-hover:translate-x-1" viewBox="0 0 20 20" fill="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5 transition-transform group-hover:translate-x-1" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
             </button>
           </div>
         ) : (
-          /* Conversational Portal Zone (Light Theme & Overlap Resolved) */
-          <div className="flex-1 w-full max-w-2xl flex flex-col justify-between items-center py-4 md:py-6 overflow-hidden" style={{ minHeight: 0 }}>
-            
-            {/* The Conversational Orb Widget */}
-            <div className="flex-1 flex flex-col items-center justify-center space-y-6 min-h-0 w-full">
-              
-              {/* Outer Orb Layout */}
-              <div className="relative flex items-center justify-center w-36 h-36 md:w-44 md:h-44 flex-shrink-0">
-                {/* Listening Pulsating Rings */}
-                {conversationState === 'listening' && (
-                  <>
-                    <div className="absolute inset-0 rounded-full border border-emerald-400/50 animate-[rippleTeal_2.5s_ease-out_infinite]"></div>
-                    <div className="absolute inset-0 rounded-full border border-emerald-400/25 animate-[rippleTeal_2.5s_ease-out_infinite_1.25s]"></div>
-                  </>
-                )}
+          /* Active Chat Outputs below the Orb */
+          <div className="w-full flex flex-col justify-start items-center overflow-visible">
+            {/* Live Speech transcript area */}
+            {conversationState === 'listening' && (
+              <p className="text-sm md:text-base text-slate-700 font-semibold italic max-w-sm mx-auto text-center line-clamp-2 mt-2">
+                {input || "Start speaking..."}
+              </p>
+            )}
 
-                {/* Speaking Concentric Waves */}
-                {conversationState === 'speaking' && (
-                  <>
-                    <div className="absolute inset-0 rounded-full border border-indigo-400/50 animate-[rippleBlue_2.5s_ease-out_infinite]"></div>
-                    <div className="absolute inset-0 rounded-full border border-indigo-400/25 animate-[rippleBlue_2.5s_ease-out_infinite_1.25s]"></div>
-                  </>
-                )}
+            {/* Blinking loader or response indicator */}
+            {conversationState === 'thinking' && (
+              <p className="text-xs text-slate-500 font-bold tracking-wider uppercase animate-pulse text-center mt-2">
+                Translating and compiling feedback...
+              </p>
+            )}
 
-                {/* The Center Orb Element */}
-                <div 
-                  onClick={handleMicClick}
-                  className={`w-24 h-24 md:w-28 md:h-28 rounded-full cursor-pointer flex items-center justify-center relative z-10 transition-all duration-500 border shadow-xl active:scale-95 ${
-                    conversationState === 'listening' ? 'bg-gradient-to-br from-emerald-500 to-teal-600 border-emerald-400/20 text-white shadow-emerald-250/20' :
-                    conversationState === 'thinking' ? 'bg-white border-indigo-150/40 text-indigo-650' :
-                    conversationState === 'speaking' ? 'bg-white border-indigo-150/40 text-indigo-600 shadow-indigo-100/40' :
-                    'bg-gradient-to-br from-indigo-500 to-violet-600 border-indigo-400/20 text-white hover:scale-105'
-                  }`}
-                >
-                  {/* Outer spinning dash loader if thinking */}
-                  {conversationState === 'thinking' && (
-                    <div className="absolute -inset-1.5 rounded-full border-[3px] border-t-indigo-500 border-r-transparent border-b-purple-500 border-l-transparent animate-orb-spin"></div>
-                  )}
-
-                  {/* Inside Icons / Flags */}
-                  <div className="text-3xl md:text-4xl select-none animate-orb-breath">
-                    {conversationState === 'speaking' ? '🗣️' : 
-                     conversationState === 'listening' ? '🎤' : 
-                     conversationState === 'thinking' ? '🧠' : 
-                     targetLang.flag}
-                  </div>
-                </div>
-              </div>
-
-              {/* Status Label & Active Transcripts */}
-              <div className="text-center space-y-3 px-4 w-full flex-1 flex flex-col justify-center min-h-0">
-                <span className={`text-[10px] font-black uppercase tracking-[0.25em] ${
-                  conversationState === 'listening' ? 'text-emerald-600' :
-                  conversationState === 'thinking' ? 'text-indigo-600 animate-pulse' :
-                  conversationState === 'speaking' ? 'text-indigo-600' :
-                  'text-slate-400'
-                }`}>
-                  {getFeedbackLabel()}
-                </span>
-
-                {/* Live Speech transcript area */}
-                {conversationState === 'listening' && (
-                  <p className="text-sm md:text-base text-slate-700 font-semibold italic max-w-sm mx-auto line-clamp-2">
-                    {input || "Start speaking..."}
-                  </p>
-                )}
-
-                {/* Blinking loader or response indicator */}
-                {conversationState === 'thinking' && (
-                  <p className="text-xs text-slate-500 font-bold tracking-wider uppercase animate-pulse">
-                    Translating and compiling feedback...
-                  </p>
-                )}
-
-                {/* Speaking/Latest AI Text Card (Split screen layout) */}
-                {conversationState !== 'listening' && conversationState !== 'thinking' && latestAIReply && (
-                  <div className="w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    {typeof latestAIReply.content === 'string' ? (
-                      <p className="text-sm font-semibold text-rose-600 text-center">{latestAIReply.content}</p>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full mt-2">
-                        
-                        {/* LEFT COLUMN: AI's Reply (Output) */}
-                        <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-2 text-left">
-                          <span className="text-[9px] font-black uppercase text-indigo-500 tracking-wider">Tutor Response</span>
-                          <div className="flex items-center gap-2">
-                            <p className={`text-base md:text-lg font-black text-slate-800 ${targetLang.isRTL ? 'font-serif text-right' : 'text-left'} leading-tight`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
-                              {joinTargetScript(latestAIReply.content.words, targetLang.code)}
-                            </p>
-                            <button 
-                              onClick={() => handleReplayVoice(joinTargetScript((latestAIReply.content as GeminiResponse).words, targetLang.code))}
-                              className="p-1 text-slate-400 hover:text-indigo-650 hover:bg-indigo-50 rounded-lg transition-colors"
-                              title="Replay Voice"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          </div>
-                          <p className="text-[10px] md:text-xs text-indigo-600 font-bold tracking-wide">
-                            {latestAIReply.content.words.map(w => w.phonetic).join(' ')}
-                          </p>
-                          <p className="text-xs text-slate-500 font-semibold italic">
-                            "{latestAIReply.content.fullTranslation}"
-                          </p>
-                        </div>
-
-                        {/* RIGHT COLUMN: What Tutor Understood from User (Explanation) */}
-                        <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-2 text-left">
-                          <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider">What I Understood You Said</span>
-                          <p className={`text-base md:text-lg font-black text-slate-800 leading-tight ${targetLang.isRTL ? 'text-right' : 'text-left'}`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
-                            {latestAIReply.content.feedback.userInput}
-                          </p>
-                          <p className="text-xs text-slate-500 font-semibold italic">
-                            "{latestAIReply.content.feedback.aiUnderstood}"
-                          </p>
-                          {latestAIReply.content.feedback.mistakes.length > 0 && (
-                            <span className="text-[9px] font-bold text-rose-500 flex items-center gap-1 mt-1">
-                              <span>⚠️ Refinement needed</span>
-                            </span>
-                          )}
-                        </div>
-
+            {/* Speaking/Latest AI Text Card (Split screen layout) */}
+            {conversationState !== 'listening' && conversationState !== 'thinking' && latestAIReply && (
+              <div className="w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {typeof latestAIReply.content === 'string' ? (
+                  <p className="text-sm font-semibold text-rose-600 text-center">{latestAIReply.content}</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full mt-2">
+                    
+                    {/* LEFT COLUMN: AI's Reply (Output) */}
+                    <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-2 text-left">
+                      <span className="text-[9px] font-black uppercase text-indigo-500 tracking-wider">Tutor Response</span>
+                      <div className="flex items-center gap-2">
+                        <p className={`text-base md:text-lg font-black text-slate-800 ${targetLang.isRTL ? 'font-serif text-right' : 'text-left'} leading-tight`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
+                          {joinTargetScript(latestAIReply.content.words, targetLang.code)}
+                        </p>
+                        <button 
+                          onClick={() => handleReplayVoice(joinTargetScript((latestAIReply.content as GeminiResponse).words, targetLang.code))}
+                          className="p-1 text-slate-400 hover:text-indigo-650 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Replay Voice"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                          </svg>
+                        </button>
                       </div>
-                    )}
+                      <p className="text-[10px] md:text-xs text-indigo-600 font-bold tracking-wide">
+                        {latestAIReply.content.words.map(w => w.phonetic).join(' ')}
+                      </p>
+                      <p className="text-xs text-slate-500 font-semibold italic">
+                        "{latestAIReply.content.fullTranslation}"
+                      </p>
+                    </div>
+
+                    {/* RIGHT COLUMN: What Tutor Understood from User (Explanation) */}
+                    <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-2 text-left">
+                      <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider">What I Understood You Said</span>
+                      <p className={`text-base md:text-lg font-black text-slate-800 leading-tight ${targetLang.isRTL ? 'text-right' : 'text-left'}`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
+                        {latestAIReply.content.feedback.userInput}
+                      </p>
+                      <p className="text-xs text-slate-500 font-semibold italic">
+                        "{latestAIReply.content.feedback.aiUnderstood}"
+                      </p>
+                      {latestAIReply.content.feedback.mistakes.length > 0 && (
+                        <span className="text-[9px] font-bold text-rose-500 flex items-center gap-1 mt-1">
+                          <span>⚠️ Refinement needed</span>
+                        </span>
+                      )}
+                    </div>
+
                   </div>
                 )}
               </div>
-            </div>
-
+            )}
           </div>
         )}
 
