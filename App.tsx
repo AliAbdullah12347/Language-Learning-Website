@@ -48,6 +48,9 @@ const App: React.FC = () => {
   const shouldRestartRef = useRef(true);
   const isSpeakingRef = useRef(false);
   const isRecognitionActiveRef = useRef(false);
+  
+  // Ref to prevent parallel duplicate API submissions in the same turn
+  const isSubmittingRef = useRef(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const historyEndRef = useRef<HTMLDivElement>(null);
@@ -256,7 +259,10 @@ const App: React.FC = () => {
 
   // Core API Submission Handler
   const handleVoiceSubmit = async (speechText: string) => {
-    if (!speechText.trim() || isLoading) return;
+    if (!speechText.trim() || isLoading || isSubmittingRef.current) return;
+
+    // Set lock ref
+    isSubmittingRef.current = true;
 
     // Reset transcripts
     accumulatedTranscriptRef.current = '';
@@ -337,12 +343,13 @@ const App: React.FC = () => {
       }
     } finally {
       setIsLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
   // Handles manual keyboard send
   const handleKeyboardSend = () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || isSubmittingRef.current) return;
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     unlockAudioContext();
     handleVoiceSubmit(input);
@@ -454,6 +461,8 @@ const App: React.FC = () => {
     .reverse()
     .find(m => m.role === 'assistant' && typeof m.content !== 'string');
 
+  const assistantMessageCount = messages.filter(m => m.role === 'assistant').length;
+
   return (
     <div className="flex flex-col h-full max-h-screen bg-slate-50 overflow-hidden font-sans relative safe-padding-bottom safe-padding-top selection:bg-indigo-200 selection:text-indigo-800">
       
@@ -483,6 +492,22 @@ const App: React.FC = () => {
 
         {/* Global Toolbar Options */}
         <div className="flex items-center gap-2">
+          {/* Collapsible Review History button moved to header to keep main screen output clean */}
+          {assistantMessageCount > 0 && (
+            <button
+              onClick={() => { unlockAudioContext(); setShowHistory(true); }}
+              title="Review Insights & Vocabulary"
+              className="p-2.5 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-2xl text-indigo-600 transition-all active:scale-95 shadow-sm relative"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
+              <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-black h-4 w-4 rounded-full flex items-center justify-center border border-white animate-pulse">
+                {assistantMessageCount}
+              </span>
+            </button>
+          )}
+
           {/* Autoplay toggler */}
           <button
             onClick={() => setIsAutoplay(!isAutoplay)}
@@ -571,7 +596,7 @@ const App: React.FC = () => {
           </div>
         ) : (
           /* Conversational Portal Zone (Light Theme & Overlap Resolved) */
-          <div className="flex-1 w-full max-w-3xl flex flex-col justify-between items-center py-4 md:py-6 overflow-hidden" style={{ minHeight: 0 }}>
+          <div className="flex-1 w-full max-w-2xl flex flex-col justify-between items-center py-4 md:py-6 overflow-hidden" style={{ minHeight: 0 }}>
             
             {/* The Conversational Orb Widget */}
             <div className="flex-1 flex flex-col items-center justify-center space-y-6 min-h-0 w-full">
@@ -700,18 +725,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Collapsible history button (Completely prevents vertical overlap on mobile screen) */}
-            {latestAIReply && !showHistory && (
-              <button 
-                onClick={() => setShowHistory(true)}
-                className="my-3 px-6 py-3 bg-white hover:bg-slate-50 border border-slate-200/80 text-indigo-600 font-bold rounded-2xl shadow-sm hover:shadow-md transition-all text-xs flex items-center gap-2 flex-shrink-0"
-              >
-                <span>Review Vocabulary Breakdown & Full Insights</span>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-            )}
           </div>
         )}
 
