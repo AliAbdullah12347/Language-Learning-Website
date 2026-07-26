@@ -557,11 +557,12 @@ const App: React.FC = () => {
                 }
               }}
               title="Clear Chat History"
-              className="p-2.5 bg-rose-50 border border-rose-100 hover:bg-rose-100 rounded-2xl text-rose-600 transition-all active:scale-95 shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 border border-rose-100 hover:bg-rose-100 rounded-2xl text-rose-600 transition-all active:scale-95 shadow-sm"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
+              <span className="text-[10px] font-black uppercase tracking-wider hidden md:inline">Clear</span>
             </button>
           )}
 
@@ -570,12 +571,13 @@ const App: React.FC = () => {
             <button
               onClick={() => { unlockAudioContext(); setShowHistory(true); }}
               title="Review Insights & Vocabulary"
-              className="p-2.5 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-2xl text-indigo-600 transition-all active:scale-95 shadow-sm relative animate-bounce"
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-2xl text-indigo-650 transition-all active:scale-95 shadow-sm relative"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
               </svg>
-              <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-black h-4 w-4 rounded-full flex items-center justify-center border border-white animate-pulse">
+              <span className="text-[10px] font-black uppercase tracking-wider hidden md:inline">Review</span>
+              <span className="bg-rose-500 text-white text-[8px] font-black h-4 w-4 rounded-full flex items-center justify-center border border-white animate-pulse">
                 {assistantMessageCount}
               </span>
             </button>
@@ -585,7 +587,7 @@ const App: React.FC = () => {
           <button
             onClick={() => setIsAutoplay(!isAutoplay)}
             title="Autoplay Voice Reply"
-            className={`p-2.5 rounded-2xl transition-all active:scale-95 border ${isAutoplay ? 'bg-indigo-50 text-indigo-600 border-indigo-200 shadow-sm' : 'bg-slate-100 text-slate-400 border-slate-200'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl transition-all active:scale-95 border ${isAutoplay ? 'bg-indigo-50 text-indigo-600 border-indigo-200 shadow-sm' : 'bg-slate-100 text-slate-400 border-slate-200'}`}
           >
             {isAutoplay ? (
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
@@ -596,17 +598,19 @@ const App: React.FC = () => {
                 <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
             )}
+            <span className="text-[10px] font-black uppercase tracking-wider hidden md:inline">{isAutoplay ? "Auto-Speak" : "Muted"}</span>
           </button>
           
           {/* Hands free toggler */}
           <button
             onClick={() => { unlockAudioContext(); setIsHandsFree(!isHandsFree); }}
             title="Hands-free Conversation Loop"
-            className={`p-2.5 rounded-2xl transition-all active:scale-95 border relative ${isHandsFree ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm' : 'bg-slate-100 text-slate-400 border-slate-200'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl transition-all active:scale-95 border relative ${isHandsFree ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm' : 'bg-slate-100 text-slate-400 border-slate-200'}`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
             </svg>
+            <span className="text-[10px] font-black uppercase tracking-wider hidden md:inline">{isHandsFree ? "Auto-Mic" : "Manual"}</span>
             <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
               {isHandsFree && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
               <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isHandsFree ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
@@ -617,12 +621,13 @@ const App: React.FC = () => {
           <button
             onClick={() => setShowSettings(true)}
             title="Open Configurations"
-            className="p-2.5 bg-slate-100 border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-200 transition-all active:scale-95 shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-200 transition-all active:scale-95 shadow-sm"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
+            <span className="text-[10px] font-black uppercase tracking-wider hidden md:inline">Settings</span>
           </button>
         </div>
       </header>
