@@ -7,6 +7,7 @@ export interface WordBreakdown {
 
 export interface Feedback {
   userInput: string;
+  userPhonetic?: string;
   aiUnderstood: string;
   mistakes: string[];
   suggestions: string;

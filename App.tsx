@@ -771,6 +771,11 @@ const App: React.FC = () => {
                             <p className={`text-base md:text-lg font-black text-slate-800 leading-tight ${targetLang.isRTL ? 'text-right' : 'text-left'}`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
                               {message.content.feedback.userInput}
                             </p>
+                            {message.content.feedback.userPhonetic && (
+                              <p className="text-[10px] md:text-xs text-emerald-600 font-bold tracking-wide">
+                                {message.content.feedback.userPhonetic}
+                              </p>
+                            )}
                             <p className="text-xs text-slate-500 font-semibold italic">
                               "{message.content.feedback.aiUnderstood}"
                             </p>
@@ -866,6 +871,9 @@ const App: React.FC = () => {
                             <div>
                               <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">I heard:</span>
                               <p className="text-xs text-slate-700 font-bold italic mt-1">"{message.content.feedback.userInput}"</p>
+                              {message.content.feedback.userPhonetic && (
+                                <p className="text-[9px] text-emerald-650 font-bold mt-0.5">{message.content.feedback.userPhonetic}</p>
+                              )}
                             </div>
                             <div>
                               <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Tutor understood:</span>

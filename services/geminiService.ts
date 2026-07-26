@@ -30,6 +30,7 @@ Follow these strict rules for every response:
 3. Provide a 'fullTranslation' which is the holistic, natural ${instructionLang} meaning of your entire response.
 4. In the 'feedback' section (all text in ${instructionLang}):
    - 'userInput': Transcribe what you think the user said in ${targetLang}. If they interspersed words in ${instructionLang} (e.g., English), transcribe it exactly or correct any phonetic mis-transcriptions.
+   - 'userPhonetic': Provide a transliteration, romanization, or Pinyin guide for the 'userInput' (especially Pinyin for Chinese inputs, Romanization for Arabic, etc.).
    - 'aiUnderstood': Briefly explain what you understood the user's intent to be (translate the user's words into ${instructionLang}, clarifying any terms they asked about).
    - 'mistakes': List any grammatical or lexical mistakes in the user's input.
    - 'suggestions': Provide a more natural way to phrase it in ${targetLang}.
@@ -78,6 +79,7 @@ export const getGeminiChatResponse = async (
             type: Type.OBJECT,
             properties: {
               userInput: { type: Type.STRING },
+              userPhonetic: { type: Type.STRING },
               aiUnderstood: { type: Type.STRING },
               mistakes: {
                 type: Type.ARRAY,
@@ -85,7 +87,7 @@ export const getGeminiChatResponse = async (
               },
               suggestions: { type: Type.STRING },
             },
-            required: ["userInput", "aiUnderstood", "mistakes", "suggestions"],
+            required: ["userInput", "userPhonetic", "aiUnderstood", "mistakes", "suggestions"],
           },
         },
         required: ["words", "fullTranslation", "feedback"],
