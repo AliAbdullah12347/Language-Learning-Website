@@ -152,6 +152,15 @@
     .wave-bar-4 { animation: wave 0.8s ease-in-out infinite 0.45s; }
     .wave-bar-5 { animation: wave 0.8s ease-in-out infinite 0.6s; }
 
+    /* Shimmer Effect keyframes */
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .animate-shimmer {
+      animation: shimmer 1.6s infinite linear;
+    }
+
     /* Hide Vercel Toolbar Injections Completely */
     vercel-live-feedback, 
     #vercel-live-feedback, 

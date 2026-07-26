@@ -268,7 +268,7 @@ const App: React.FC = () => {
             if (finalSpeech.trim().length > 1) {
               handleVoiceSubmit(finalSpeech.trim());
             }
-          }, 1800);
+          }, 1100);
         }
       };
 
@@ -732,9 +732,32 @@ const App: React.FC = () => {
 
             {/* Blinking loader or response indicator */}
             {conversationState === 'thinking' && (
-              <p className="text-xs text-slate-500 font-bold tracking-wider uppercase animate-pulse text-center mt-2">
-                Translating and compiling feedback...
-              </p>
+              <div className="w-full space-y-4 animate-in fade-in duration-300">
+                <p className="text-xs text-indigo-650 font-bold tracking-wider uppercase animate-pulse text-center mt-2">
+                  Compiling feedback and pronunciation keys...
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl mx-auto">
+                  
+                  {/* LEFT SKELETON: AI Tutor response */}
+                  <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-3 text-left relative overflow-hidden min-h-[145px]">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-100/70 to-transparent -translate-x-full animate-shimmer"></div>
+                    <span className="text-[9px] font-black uppercase text-indigo-400 tracking-wider">Tutor Response</span>
+                    <div className="h-4.5 bg-slate-100 rounded-lg w-3/4 animate-pulse"></div>
+                    <div className="h-3 bg-slate-100/80 rounded-md w-1/2 animate-pulse"></div>
+                    <div className="h-3.5 bg-slate-100/60 rounded-md w-5/6 animate-pulse"></div>
+                  </div>
+
+                  {/* RIGHT SKELETON: What I Understood */}
+                  <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-3 text-left relative overflow-hidden min-h-[145px]">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-100/70 to-transparent -translate-x-full animate-shimmer"></div>
+                    <span className="text-[9px] font-black uppercase text-emerald-500 tracking-wider">What I Understood You Said</span>
+                    <div className="h-4.5 bg-slate-100 rounded-lg w-2/3 animate-pulse"></div>
+                    <div className="h-3.5 bg-slate-100/60 rounded-md w-4/5 animate-pulse"></div>
+                    <div className="h-3 bg-slate-100/40 rounded-md w-1/3 animate-pulse"></div>
+                  </div>
+
+                </div>
+              </div>
             )}
 
             {/* Scrollable list of previous and current split cards */}

@@ -54,7 +54,7 @@ export const getGeminiChatResponse = async (
 ): Promise<GeminiResponse> => {
   const client = getAIClient();
   const result = await client.models.generateContent({
-    model: "gemini-3.5-flash",
+    model: "gemini-3.5-flash-lite",
     contents: [
       ...history,
       { role: "user", parts: [{ text: message }] }
