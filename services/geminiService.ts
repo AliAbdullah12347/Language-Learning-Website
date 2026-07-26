@@ -40,6 +40,9 @@ Mixed-Language Queries & Phonetic Approximations:
 - Since the speech recognition engine is listening in ${targetLang}, it will often transcribe ${instructionLang} words using phonetic approximations in ${targetLang} script (for example, if learning Chinese, it might transcribe 'apple' as '艾坡' or '阿坡', 'window' as '温豆' or '稳度', 'banana' as '班纳纳', or 'hello' as '哈喽').
 - Use context, phonetic similarity, and intent analysis to deduce the intended word in ${instructionLang}. Respond naturally in ${targetLang} explaining the correct target equivalent, and document the corrected transcription in the feedback panel (e.g., correct "怎么说 温豆？" to "怎么说 'window'？" in 'userInput' and explain it in 'aiUnderstood').
 
+JSON Escaping Rule:
+- Ensure that your response is a valid, well-formed JSON object. All string fields must be properly escaped. Do not use unescaped double quotes within the JSON string values.
+
 Keep responses concise (1-3 sentences) to maintain a natural conversation pace.
 `;
 
@@ -98,6 +101,16 @@ export const getGeminiChatResponse = async (
   const text = result.text;
   if (!text) throw new Error("No response from AI");
 
-  const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-  return JSON.parse(cleanJson) as GeminiResponse;
+  // Robust JSON extraction using braces matching
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error(`Could not find JSON object in AI response. Raw output: ${text.slice(0, 120)}...`);
+  }
+  
+  try {
+    return JSON.parse(jsonMatch[0]) as GeminiResponse;
+  } catch (parseError: any) {
+    console.error("JSON parsing crash on raw text:", text);
+    throw new Error(`Failed to parse structured JSON: ${parseError.message}. Raw output: ${text.slice(0, 120)}...`);
+  }
 };

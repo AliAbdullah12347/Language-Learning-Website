@@ -376,12 +376,13 @@ const App: React.FC = () => {
       } else {
         setConversationState('idle');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI response retrieval error:", error);
+      const errDetail = error?.message || String(error);
       const errorMessage: ChatMessage = {
         id: (Date.now() + 3).toString(),
         role: 'assistant',
-        content: "Sorry, I couldn't get a response. Please check your network and API key.",
+        content: `Sorry, I couldn't get a response. (Error: ${errDetail}). Please check your network, API key, or model configuration.`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -543,6 +544,27 @@ const App: React.FC = () => {
 
         {/* Global Toolbar Options */}
         <div className="flex items-center gap-2">
+          {/* Quick Clear Chat History button */}
+          {messages.length > 0 && (
+            <button
+              onClick={() => {
+                if (window.confirm("Are you sure you want to clear all chat history and start over?")) {
+                  setMessages([]);
+                  setConversationState('idle');
+                  if (window.speechSynthesis) {
+                    window.speechSynthesis.cancel();
+                  }
+                }
+              }}
+              title="Clear Chat History"
+              className="p-2.5 bg-rose-50 border border-rose-100 hover:bg-rose-100 rounded-2xl text-rose-600 transition-all active:scale-95 shadow-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
+
           {/* Collapsible Review History button moved to header to keep main screen output clean */}
           {assistantMessageCount > 0 && (
             <button
