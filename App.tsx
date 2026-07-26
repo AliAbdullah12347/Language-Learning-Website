@@ -27,12 +27,53 @@ const joinTargetScript = (words: WordBreakdown[], langCode: string) => {
 };
 
 const App: React.FC = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Persistence initialization: Load messages from localStorage
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem('polyglot_messages');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.map((m: any) => ({
+          ...m,
+          timestamp: new Date(m.timestamp)
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to load messages from localStorage:", e);
+    }
+    return [];
+  });
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [targetLang, setTargetLang] = useState(TARGET_LANGUAGES[0]);
-  const [instructionLang, setInstructionLang] = useState(INSTRUCTION_LANGUAGES[0]);
+
+  // Persistence initialization: Load target language
+  const [targetLang, setTargetLang] = useState<Language>(() => {
+    const saved = localStorage.getItem('polyglot_target_lang');
+    if (saved) {
+      try {
+        const code = JSON.parse(saved);
+        const match = TARGET_LANGUAGES.find(l => l.code === code);
+        if (match) return match;
+      } catch (e) {}
+    }
+    return TARGET_LANGUAGES[0];
+  });
+
+  // Persistence initialization: Load instruction language
+  const [instructionLang, setInstructionLang] = useState<Language>(() => {
+    const saved = localStorage.getItem('polyglot_instruction_lang');
+    if (saved) {
+      try {
+        const code = JSON.parse(saved);
+        const match = INSTRUCTION_LANGUAGES.find(l => l.code === code);
+        if (match) return match;
+      } catch (e) {}
+    }
+    return INSTRUCTION_LANGUAGES[0];
+  });
+
   const [isAutoplay, setIsAutoplay] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [isHandsFree, setIsHandsFree] = useState(false);
@@ -60,6 +101,21 @@ const App: React.FC = () => {
   useEffect(() => {
     isHandsFreeRef.current = isHandsFree;
   }, [isHandsFree]);
+
+  // Sync messages to localStorage
+  useEffect(() => {
+    localStorage.setItem('polyglot_messages', JSON.stringify(messages));
+  }, [messages]);
+
+  // Sync target language to localStorage
+  useEffect(() => {
+    localStorage.setItem('polyglot_target_lang', JSON.stringify(targetLang.code));
+  }, [targetLang]);
+
+  // Sync instruction language to localStorage
+  useEffect(() => {
+    localStorage.setItem('polyglot_instruction_lang', JSON.stringify(instructionLang.code));
+  }, [instructionLang]);
 
   // Unlock iOS Safari Audio engines on first user gesture
   const unlockAudioContext = () => {
@@ -236,7 +292,7 @@ const App: React.FC = () => {
     };
   }, [targetLang.code, messages]);
 
-  // Scroll insights / chats to bottom
+  // Scroll active chats to bottom
   const scrollToChatBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -456,11 +512,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Get latest AI reply data
-  const latestAIReply = [...messages]
-    .reverse()
-    .find(m => m.role === 'assistant' && typeof m.content !== 'string');
-
   const assistantMessageCount = messages.filter(m => m.role === 'assistant').length;
 
   return (
@@ -642,9 +693,10 @@ const App: React.FC = () => {
             </button>
           </div>
         ) : (
-          /* Active Chat Outputs below the Orb */
-          <div className="w-full flex flex-col justify-start items-center overflow-visible">
-            {/* Live Speech transcript area */}
+          /* Active Chat Outputs below the Orb (Scrollable Chat History Thread) */
+          <div className="w-full flex flex-col justify-start items-center overflow-visible space-y-6">
+            
+            {/* Live Speech transcript area (Shown during input) */}
             {conversationState === 'listening' && (
               <p className="text-sm md:text-base text-slate-700 font-semibold italic max-w-sm mx-auto text-center line-clamp-2 mt-2">
                 {input || "Start speaking..."}
@@ -658,59 +710,85 @@ const App: React.FC = () => {
               </p>
             )}
 
-            {/* Speaking/Latest AI Text Card (Split screen layout) */}
-            {conversationState !== 'listening' && conversationState !== 'thinking' && latestAIReply && (
-              <div className="w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {typeof latestAIReply.content === 'string' ? (
-                  <p className="text-sm font-semibold text-rose-600 text-center">{latestAIReply.content}</p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full mt-2">
-                    
-                    {/* LEFT COLUMN: AI's Reply (Output) */}
-                    <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-2 text-left">
-                      <span className="text-[9px] font-black uppercase text-indigo-500 tracking-wider">Tutor Response</span>
-                      <div className="flex items-center gap-2">
-                        <p className={`text-base md:text-lg font-black text-slate-800 ${targetLang.isRTL ? 'font-serif text-right' : 'text-left'} leading-tight`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
-                          {joinTargetScript(latestAIReply.content.words, targetLang.code)}
-                        </p>
-                        <button 
-                          onClick={() => handleReplayVoice(joinTargetScript((latestAIReply.content as GeminiResponse).words, targetLang.code))}
-                          className="p-1 text-slate-400 hover:text-indigo-650 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title="Replay Voice"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                          </svg>
-                        </button>
-                      </div>
-                      <p className="text-[10px] md:text-xs text-indigo-600 font-bold tracking-wide">
-                        {latestAIReply.content.words.map(w => w.phonetic).join(' ')}
-                      </p>
-                      <p className="text-xs text-slate-500 font-semibold italic">
-                        "{latestAIReply.content.fullTranslation}"
-                      </p>
-                    </div>
+            {/* Scrollable list of previous and current split cards */}
+            <div className="w-full space-y-6 overflow-visible flex flex-col items-center">
+              {messages.map((message) => {
+                if (message.role === 'user') {
+                  // Only show the User's message if it is the very latest message (being processed)
+                  // and we don't have the AI response split card representing this turn yet.
+                  const isLatestUserMessage = messages[messages.length - 1].id === message.id;
+                  if (!isLatestUserMessage) return null;
 
-                    {/* RIGHT COLUMN: What Tutor Understood from User (Explanation) */}
-                    <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-2 text-left">
-                      <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider">What I Understood You Said</span>
-                      <p className={`text-base md:text-lg font-black text-slate-800 leading-tight ${targetLang.isRTL ? 'text-right' : 'text-left'}`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
-                        {latestAIReply.content.feedback.userInput}
-                      </p>
-                      <p className="text-xs text-slate-500 font-semibold italic">
-                        "{latestAIReply.content.feedback.aiUnderstood}"
-                      </p>
-                      {latestAIReply.content.feedback.mistakes.length > 0 && (
-                        <span className="text-[9px] font-bold text-rose-500 flex items-center gap-1 mt-1">
-                          <span>⚠️ Refinement needed</span>
-                        </span>
+                  return (
+                    <div key={message.id} className="flex justify-end w-full animate-in slide-in-from-right-4 duration-350 max-w-xl">
+                      <div className="bg-indigo-600 text-white px-5 py-3 rounded-2xl rounded-tr-none max-w-[85%] shadow-md border border-indigo-500/10">
+                        <p className={`text-sm font-semibold leading-relaxed ${targetLang.isRTL ? 'text-right' : 'text-left'}`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
+                          {message.content as string}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  // Assistant message: Render the split-screen cards representing the full conversation turn
+                  return (
+                    <div key={message.id} className="w-full animate-in slide-in-from-left-4 duration-350 max-w-2xl">
+                      {typeof message.content === 'string' ? (
+                        <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl border border-rose-100 flex items-center gap-3">
+                          <span className="text-rose-500 text-lg">⚠️</span>
+                          <p className="text-xs font-bold">{message.content}</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                          
+                          {/* LEFT COLUMN: AI's Reply (Output) */}
+                          <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-2 text-left">
+                            <span className="text-[9px] font-black uppercase text-indigo-500 tracking-wider">Tutor Response</span>
+                            <div className="flex items-center gap-2">
+                              <p className={`text-base md:text-lg font-black text-slate-800 ${targetLang.isRTL ? 'font-serif text-right' : 'text-left'} leading-tight`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
+                                {joinTargetScript(message.content.words, targetLang.code)}
+                              </p>
+                              <button 
+                                onClick={() => handleReplayVoice(joinTargetScript((message.content as GeminiResponse).words, targetLang.code))}
+                                className="p-1 text-slate-400 hover:text-indigo-650 hover:bg-indigo-50 rounded-lg transition-colors"
+                                title="Replay Voice"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </div>
+                            <p className="text-[10px] md:text-xs text-indigo-600 font-bold tracking-wide">
+                              {message.content.words.map(w => w.phonetic).join(' ')}
+                            </p>
+                            <p className="text-xs text-slate-500 font-semibold italic">
+                              "{message.content.fullTranslation}"
+                            </p>
+                          </div>
+
+                          {/* RIGHT COLUMN: What Tutor Understood from User (Explanation) */}
+                          <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.01)] flex flex-col justify-center space-y-2 text-left">
+                            <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider">What I Understood You Said</span>
+                            <p className={`text-base md:text-lg font-black text-slate-800 leading-tight ${targetLang.isRTL ? 'text-right' : 'text-left'}`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
+                              {message.content.feedback.userInput}
+                            </p>
+                            <p className="text-xs text-slate-500 font-semibold italic">
+                              "{message.content.feedback.aiUnderstood}"
+                            </p>
+                            {message.content.feedback.mistakes.length > 0 && (
+                              <span className="text-[9px] font-bold text-rose-500 flex items-center gap-1 mt-1">
+                                <span>⚠️ Refinement needed</span>
+                              </span>
+                            )}
+                          </div>
+
+                        </div>
                       )}
                     </div>
+                  );
+                }
+              })}
+            </div>
 
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
@@ -738,93 +816,87 @@ const App: React.FC = () => {
 
             {/* Scrollable list of message insight blocks */}
             <div className="flex-1 overflow-y-auto p-5 space-y-8 bg-slate-50">
-              {messages.map((message) => (
-                <div key={message.id} className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'} space-y-2`}>
-                  {message.role === 'user' ? (
-                    <div className="bg-indigo-600 text-white px-5 py-3 rounded-2xl rounded-tr-none max-w-[85%] shadow-md border border-indigo-500/10">
-                      <p className={`text-sm font-semibold leading-relaxed ${targetLang.isRTL ? 'text-right' : 'text-left'}`} dir={targetLang.isRTL ? 'rtl' : 'ltr'}>
-                        {message.content as string}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-6 w-full max-w-xl">
-                      {typeof message.content === 'string' ? (
-                        <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl border border-rose-100 flex items-center gap-3">
-                          <span className="text-rose-500 text-lg">⚠️</span>
-                          <p className="text-xs font-bold">{message.content}</p>
+              {messages.map((message) => {
+                if (message.role === 'user') return null; // We only aggregate AI feedbacks in this section
+
+                return (
+                  <div key={message.id} className="space-y-6 w-full max-w-xl mx-auto">
+                    {typeof message.content === 'string' ? (
+                      <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl border border-rose-100 flex items-center gap-3">
+                        <span className="text-rose-500 text-lg">⚠️</span>
+                        <p className="text-xs font-bold">{message.content}</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Vocabulary breakdown card (Clean Light Theme) */}
+                        <div className="p-0.5 rounded-3xl bg-gradient-to-r from-indigo-200 via-purple-200 to-pink-200 shadow-md">
+                          <div className="bg-white rounded-[1.4rem] p-5 space-y-5">
+                            <span className="block text-[9px] font-black uppercase text-indigo-400 tracking-wider">Vocabulary Cards</span>
+                            <div 
+                              className={`flex flex-wrap gap-x-3 gap-y-3 ${targetLang.isRTL ? 'flex-row-reverse text-right' : 'flex-row text-left'}`} 
+                              dir={targetLang.isRTL ? 'rtl' : 'ltr'}
+                            >
+                              {message.content.words.map((word, wIdx) => {
+                                // Skip punctuation only breakdown blocks to avoid layouts clutter
+                                const isPunctuation = /^[\p{P}\p{S}]+$/u.test(word.script.trim());
+                                if (isPunctuation) return null;
+
+                                return (
+                                  <div key={wIdx} className="flex flex-col items-center bg-slate-50 border border-slate-200/80 px-3.5 py-2.5 rounded-2xl min-w-[75px]">
+                                    <span className="text-[9px] text-indigo-650 font-extrabold mb-1">{word.phonetic}</span>
+                                    <span className="text-lg font-black text-slate-800 mb-1">{word.script}</span>
+                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-tight">{word.meaning}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-100 space-y-1">
+                              <span className="text-[9px] font-black uppercase text-indigo-400 tracking-wider">Full translation</span>
+                              <p className="text-slate-800 font-bold text-base leading-normal">
+                                "{message.content.fullTranslation}"
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                      ) : (
-                        <>
-                          {/* Vocabulary breakdown card (Clean Light Theme) */}
-                          <div className="p-0.5 rounded-3xl bg-gradient-to-r from-indigo-200 via-purple-200 to-pink-200 shadow-md">
-                            <div className="bg-white rounded-[1.4rem] p-5 space-y-5">
-                              <span className="block text-[9px] font-black uppercase text-indigo-400 tracking-wider">Vocabulary Cards</span>
-                              <div 
-                                className={`flex flex-wrap gap-x-3 gap-y-3 ${targetLang.isRTL ? 'flex-row-reverse text-right' : 'flex-row text-left'}`} 
-                                dir={targetLang.isRTL ? 'rtl' : 'ltr'}
-                              >
-                                {message.content.words.map((word, wIdx) => {
-                                  // Skip punctuation only breakdown blocks to avoid layouts clutter
-                                  const isPunctuation = /^[\p{P}\p{S}]+$/u.test(word.script.trim());
-                                  if (isPunctuation) return null;
 
-                                  return (
-                                    <div key={wIdx} className="flex flex-col items-center bg-slate-50 border border-slate-200/80 px-3.5 py-2.5 rounded-2xl min-w-[75px]">
-                                      <span className="text-[9px] text-indigo-650 font-extrabold mb-1">{word.phonetic}</span>
-                                      <span className="text-lg font-black text-slate-800 mb-1">{word.script}</span>
-                                      <span className="text-[9px] text-slate-500 font-black uppercase tracking-tight">{word.meaning}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-
-                              <div className="pt-4 border-t border-slate-100 space-y-1">
-                                <span className="text-[9px] font-black uppercase text-indigo-400 tracking-wider">Full translation</span>
-                                <p className="text-slate-800 font-bold text-base leading-normal">
-                                  "{message.content.fullTranslation}"
-                                </p>
-                              </div>
+                        {/* Grammar feedback panel (Clean Light Theme) */}
+                        <div className="bg-white border border-slate-200/80 rounded-3xl p-5 space-y-5 shadow-sm">
+                          <div className="grid grid-cols-2 gap-4 border-b border-slate-100 pb-4">
+                            <div>
+                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">I heard:</span>
+                              <p className="text-xs text-slate-700 font-bold italic mt-1">"{message.content.feedback.userInput}"</p>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Tutor understood:</span>
+                              <p className="text-xs text-slate-600 font-semibold mt-1">"{message.content.feedback.aiUnderstood}"</p>
                             </div>
                           </div>
 
-                          {/* Grammar feedback panel (Clean Light Theme) */}
-                          <div className="bg-white border border-slate-200/80 rounded-3xl p-5 space-y-5 shadow-sm">
-                            <div className="grid grid-cols-2 gap-4 border-b border-slate-100 pb-4">
-                              <div>
-                                <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">I heard:</span>
-                                <p className="text-xs text-slate-700 font-bold italic mt-1">"{message.content.feedback.userInput}"</p>
-                              </div>
-                              <div>
-                                <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Tutor understood:</span>
-                                <p className="text-xs text-slate-600 font-semibold mt-1">"{message.content.feedback.aiUnderstood}"</p>
-                              </div>
+                          {message.content.feedback.mistakes.length > 0 && (
+                            <div className="space-y-2">
+                              <span className="text-[9px] font-black uppercase text-rose-500 tracking-wider">Refinements</span>
+                              <ul className="space-y-1">
+                                {message.content.feedback.mistakes.map((mis, mIdx) => (
+                                  <li key={mIdx} className="text-xs text-slate-600 font-medium flex items-start gap-2">
+                                    <span className="text-rose-500 font-bold">•</span>
+                                    <span>{mis}</span>
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
+                          )}
 
-                            {message.content.feedback.mistakes.length > 0 && (
-                              <div className="space-y-2">
-                                <span className="text-[9px] font-black uppercase text-rose-500 tracking-wider">Refinements</span>
-                                <ul className="space-y-1">
-                                  {message.content.feedback.mistakes.map((mis, mIdx) => (
-                                    <li key={mIdx} className="text-xs text-slate-600 font-medium flex items-start gap-2">
-                                      <span className="text-rose-500 font-bold">•</span>
-                                      <span>{mis}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
-                            <div className="bg-emerald-50 border border-emerald-200/60 p-4 rounded-2xl">
-                              <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider">Try this phrasing:</span>
-                              <p className="text-sm font-black text-slate-700 mt-1">{message.content.feedback.suggestions}</p>
-                            </div>
+                          <div className="bg-emerald-50 border border-emerald-200/60 p-4 rounded-2xl">
+                            <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider">Try this phrasing:</span>
+                            <p className="text-sm font-black text-slate-700 mt-1">{message.content.feedback.suggestions}</p>
                           </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
               <div ref={historyEndRef} />
             </div>
           </div>
